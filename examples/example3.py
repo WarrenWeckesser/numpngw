@@ -17,7 +17,7 @@ x = np.random.randn(nrows, ncols, 3)
 x = np.apply_along_axis(lambda z: np.convolve(z, kernel, mode='same'), 0, x)
 x = np.apply_along_axis(lambda z: np.convolve(z, kernel, mode='same'), 1, x)
 
-# Convert to 16 bit unsigned integers and create the PNG file.
+# Convert to 16 bit unsigned integers.
 z = (65535*((x - x.max())/x.ptp())).astype(np.uint16)
 
 # Create two squares containing (0, 0, 0).
