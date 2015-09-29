@@ -28,7 +28,7 @@ The following script creates this PNG file, an 8-bit RGB image.
     #
     # Create an 8-bit RGB image.
 
-    img = np.empty((80, 128, 3), dtype=np.uint8)
+    img = np.zeros((80, 128, 3), dtype=np.uint8)
 
     grad1 = np.linspace(0, 255, img.shape[1])
     grad2 = np.linspace(255, 0, img.shape[1])
