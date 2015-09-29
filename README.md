@@ -7,9 +7,6 @@ nump array to a PNG file.
 This is prototype-quality software.  The documentation is sparse, and the API
 will likely change.
 
-Plots are generated with matplotlib (http://matplotlib.org/).
-To use the package, numpy, scipy and matplotlib must be installed.
-
 This software is released under the BSD 2-clause license.
 
 Example 1
