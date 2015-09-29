@@ -2,7 +2,7 @@ pngw
 ====
 
 This python package defines the function `write_png` that writes a
-nump array to a PNG file.
+numpy array to a PNG file.
 
 This is prototype-quality software.  The documentation is sparse, and the API
 will likely change.
