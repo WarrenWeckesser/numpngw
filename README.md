@@ -7,6 +7,10 @@ numpy array to a PNG file.
 This is prototype-quality software.  The documentation is sparse, and the API
 will likely change.
 
+For packages with more features (including functions for *reading* PNG files),
+take a look at `pypng` (https://pypi.python.org/pypi/pypng) or `imageio`
+(https://pypi.python.org/pypi/imageio).
+
 This software is released under the BSD 2-clause license.
 
 Example 1
