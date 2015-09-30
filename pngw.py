@@ -456,24 +456,24 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
     text_list : list of (keyword, text) tuples, optional
         Each tuple is written to the file as a 'tEXt' chunk.
     use_palette : bool, optional
-        If True, *and* the data type of `a` is `numpy.uint8`, *and* the size
-        of `a` is (m, n, 3), then a PLTE chunk is created and an indexed color
-        image is created.  (If the conditions on `a` are not true, this
-        argument is ignored and a palette is not created.)  There must not be
-        more than 256 distinct colors in `a`.  If the conditions on `a` are
-        true but the array has more than 256 colors, a ValueError exception
-        is raised.
+        If True, *and* the data type of the arrays in `seq` is `numpy.uint8`,
+        *and* the size of each array is (m, n, 3), then a PLTE chunk is
+        created and an indexed color image is created.  (If the conditions
+        on the arrays are not true, this argument is ignored and a palette
+        is not created.)  There must not be more than 256 distinct colors in
+        the arrays.  If the above conditions are true but the arrays have
+        more than 256 colors, a ValueError exception is raised.
     transparent : integer or 3-tuple of integers (r, g, b), optional
-        If the colors in `a` do not include an alpha channel (i.e. the shape
-        of `a` is (m, n), (m, n, 1) or (m, n, 3)), the `transparent` argument
-        can be used to specify a single color that is to be considered the
-        transparent color.  This argument is ignored if `a` includes an
-        alpha channel.
+        If the colors in the input arrays do not include an alpha channel
+        (i.e. the shape of each array is (m, n), (m, n, 1) or (m, n, 3)),
+        the `transparent` argument can be used to specify a single color that
+        is to be considered the transparent color.  This argument is ignored
+        if the arrays have an alpha channel.
     bitdepth : integer, optional
         Bit depth of the output image.  Valid values are 1, 2, 4 and 8.
         Only valid for grayscale images with no alpha channel with an input
         array having dtype numpy.uint8.  If not given, the bit depth is
-        inferred from the data type of the input array `a`.
+        inferred from the data type of the input arrays.
     """
     num_frames = len(seq)
     if num_frames == 0:
