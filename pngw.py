@@ -1,5 +1,6 @@
 """
 write_png(...) writes a numpy array to a PNG file.
+write_apng(...) writes a sequenace of arrays to an APNG file.
 
 This code has no dependencies other than numpy and the python standard
 libraries.
@@ -142,11 +143,11 @@ def _palettize(a):
     # `a` must be a numpy array with dtype `np.uint8` and shape (m, n, 3) or
     # (m, n, 4).
     a = _np.ascontiguousarray(a)
-    depth = a.shape[2]
+    depth = a.shape[-1]
     dt = ','.join(['u1'] * depth)
-    b = a.view(dt).reshape(a.shape[:2])
+    b = a.view(dt).reshape(a.shape[:-1])
     colors, inv = _np.unique(b, return_inverse=True)
-    index = inv.astype(_np.uint8).reshape(a.shape[:2])
+    index = inv.astype(_np.uint8).reshape(a.shape[:-1])
     # palette is the RGB values of the unique RGBA colors.
     palette = colors.view(_np.uint8).reshape(-1, depth)[:, :3]
     if depth == 3:
@@ -190,6 +191,45 @@ def _pack(a, bitdepth):
             b[row, bcol] |= (val << pos)
 
     return b
+
+
+def _validate_array(a):
+    if a.ndim != 2:
+        if a.ndim != 3 or a.shape[2] > 4 or a.shape[2] == 0:
+            raise ValueError("array must be 2D, or 3D with shape "
+                             "(m, n, d) with 1 <= d <= 4.")
+    itemsize = a.dtype.itemsize
+    if not _np.issubdtype(a.dtype, _np.unsignedinteger) or itemsize > 2:
+        raise ValueError("array must be an array of 8- or 16-bit "
+                         "unsigned integers")
+
+
+def _get_color_type(a, use_palette):
+    if a.ndim == 2:
+        color_type = 0
+    else:
+        depth = a.shape[2]
+        if depth == 1:
+            # Grayscale
+            color_type = 0
+        elif depth == 2:
+            # Grayscale and alpha
+            color_type = 4
+        elif depth == 3:
+            # RGB
+            if a.dtype == _np.uint8 and use_palette:
+                # Indexed color (create a palette)
+                color_type = 3
+            else:
+                # RGB colors
+                color_type = 2
+        elif depth == 4:
+            # RGB and alpha
+            if a.dtype == _np.uint8 and use_palette:
+                color_type = 3
+            else:
+                color_type = 6
+    return color_type
 
 
 def write_png(fileobj, a, text_list=None, use_palette=False,
@@ -246,14 +286,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
             4          RGB and alpha
     """
 
-    if a.ndim != 2:
-        if a.ndim != 3 or a.shape[2] > 4 or a.shape[2] == 0:
-            raise ValueError("array `a` must be 2D, or 3D with shape "
-                             "(m, n, d) with 1 <= d <= 4.")
-    itemsize = a.dtype.itemsize
-    if not _np.issubdtype(a.dtype, _np.unsignedinteger) or itemsize > 2:
-        raise ValueError("array `a` must be an array of 8- or 16-bit "
-                         "unsigned integers")
+    _validate_array(a)
 
     _validate_text(text_list)
 
@@ -267,30 +300,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     #      4        Grayscale and alpha
     #      6        RGBA
 
-    if a.ndim == 2:
-        color_type = 0
-    else:
-        depth = a.shape[2]
-        if depth == 1:
-            # Grayscale
-            color_type = 0
-        elif depth == 2:
-            # Grayscale and alpha
-            color_type = 4
-        elif depth == 3:
-            # RGB
-            if a.dtype == _np.uint8 and use_palette:
-                # Indexed color (create a palette)
-                color_type = 3
-            else:
-                # RGB colors
-                color_type = 2
-        elif depth == 4:
-            # RGB and alpha
-            if a.dtype == _np.uint8 and use_palette:
-                color_type = 3
-            else:
-                color_type = 6
+    color_type = _get_color_type(a, use_palette)
 
     trans = None
     if color_type == 3:
@@ -381,6 +391,224 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
             start = k*idatmax
             end = min(start + idatmax, len(zstream))
             _write_idat(f, zstream[start:end])
+
+    # IEND chunk
+    _write_iend(f)
+
+    if f != fileobj:
+        f.close()
+
+
+def _write_actl(f, num_frames, num_plays):
+    """Write an acTL chunk to `f`."""
+    if num_frames < 1:
+        raise ValueError("Attempt to create acTL chunk with num_frames (%i) "
+                         "less than 1." % (num_frames,))
+    chunk_data = _struct.pack("!II", num_frames, num_plays)
+    _write_chunk(f, b"acTL", chunk_data)
+
+
+def _write_fctl(f, sequence_number, width, height, x_offset, y_offset,
+                delay_num, delay_den, dispose_op=0, blend_op=0):
+    """Write an fcTL chunk to `f`."""
+    if width < 1:
+        raise ValueError("width must be greater than 0")
+    if height < 1:
+        raise ValueError("heigt must be greater than 0")
+    if x_offset < 0:
+        raise ValueError("x_offset must be nonnegative")
+    if y_offset < 0:
+        raise ValueError("y_offset must be nonnegative")
+
+    fmt = "!IIIIIHHBB"
+    chunk_data = _struct.pack(fmt, sequence_number, width, height,
+                              x_offset, y_offset, delay_num, delay_den,
+                              dispose_op, blend_op)
+    _write_chunk(f, b"fcTL", chunk_data)
+
+
+def _write_fdat(f, sequence_number, data):
+    """Write an fdAT chunk to `f`."""
+    seq = _struct.pack("!I", sequence_number)
+    _write_chunk(f, b"fdAT", seq + data)
+
+
+# TODO: Clean up repeated code in write_png() write_apng().
+
+def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
+               use_palette=False, transparent=None, bitdepth=None):
+    """
+    Write an APNG file from a sequence of numpy arrays.
+
+    Warning:
+    * This API is experimental, and will likely change.
+    * The function has not been thoroughly tested.
+
+    Parameters
+    ----------
+    seq : sequence of numpy arrays
+        All the arrays must have the same shape and dtype.
+    delay : scalar
+        The time delay between frames, in milliseconds.
+    num_plays : int
+        The number of times to repeat the animation.  If 0, the animate
+        is repeated indefinitely.
+    text_list : list of (keyword, text) tuples, optional
+        Each tuple is written to the file as a 'tEXt' chunk.
+    use_palette : bool, optional
+        If True, *and* the data type of `a` is `numpy.uint8`, *and* the size
+        of `a` is (m, n, 3), then a PLTE chunk is created and an indexed color
+        image is created.  (If the conditions on `a` are not true, this
+        argument is ignored and a palette is not created.)  There must not be
+        more than 256 distinct colors in `a`.  If the conditions on `a` are
+        true but the array has more than 256 colors, a ValueError exception
+        is raised.
+    transparent : integer or 3-tuple of integers (r, g, b), optional
+        If the colors in `a` do not include an alpha channel (i.e. the shape
+        of `a` is (m, n), (m, n, 1) or (m, n, 3)), the `transparent` argument
+        can be used to specify a single color that is to be considered the
+        transparent color.  This argument is ignored if `a` includes an
+        alpha channel.
+    bitdepth : integer, optional
+        Bit depth of the output image.  Valid values are 1, 2, 4 and 8.
+        Only valid for grayscale images with no alpha channel with an input
+        array having dtype numpy.uint8.  If not given, the bit depth is
+        inferred from the data type of the input array `a`.
+    """
+    num_frames = len(seq)
+    if num_frames == 0:
+        raise ValueError("no frames given in `seq`")
+
+    if type(seq) == _np.ndarray:
+        # seq is a single numpy array containing the frames.
+        _validate_array(seq[0])
+    else:
+        # seq is not a numpy array, so it must be a sequence of numpy arrays,
+        # all with the same dtype and shape.
+        for a in seq:
+            _validate_array(a)
+        if any(a.dtype != seq[0].dtype for a in seq[1:]):
+            raise ValueError("all arrays in `seq` must have the same dtype.")
+        if any(a.shape != seq[0].shape for a in seq[1:]):
+            raise ValueError("all arrays in `seq` must have the same shape.")
+
+    _validate_text(text_list)
+
+    # Get the array for the first frame.
+    a = seq[0]
+
+    color_type = _get_color_type(a, use_palette)
+
+    trans = None
+    if color_type == 3:
+        # The array is 8 bit RGB or RGBA, and a palette is to be created.
+
+        # Note that this replaces `a` with the index array.
+        seq = _np.array(seq)
+        seq, palette, trans = _palettize(seq)
+        a = seq[0]
+        if len(palette) > 256:
+            raise ValueError("The input has %d colors.  No more than 256 "
+                             "colors are allowed when using a palette." %
+                             len(palette))
+
+        if trans is None and transparent is not None:
+            # The array does not have an alpha channel.  The caller has given
+            # a color value that should be considered to be transparent.
+            palette_index = _np.nonzero((palette == transparent).all(axis=1))[0]
+            if palette_index.size > 0:
+                if palette_index.size > 1:
+                    raise ValueError("Only one transparent color may be given.")
+                trans = _np.zeros(palette_index[0]+1, dtype=_np.uint8)
+                trans[:-1] = 255
+
+    elif (color_type == 0 or color_type == 2) and transparent is not None:
+        # XXX Should do some validation of `transparent`...
+        trans = _np.asarray(transparent, dtype=_np.uint16)
+
+    if bitdepth == 8 and a.dtype == _np.uint8:
+        bitdepth = None
+
+    if bitdepth is not None:
+        if a.dtype != _np.uint8:
+            raise ValueError('Input arrays must have dtype uint8 when '
+                             'bitdepth < 8 is given.')
+        if bitdepth not in [1, 2, 4, 8]:
+            raise ValueError('bitdepth %i is not valid.  Valid values are '
+                             '1, 2, 4 or 8' % (bitdepth,))
+        if color_type != 0:
+            raise ValueError('bitdepth may only be specified for grayscale '
+                             'images with no alpha channel')
+
+    if hasattr(fileobj, 'write'):
+        # Assume it is a file-like object with a write method.
+        f = fileobj
+    else:
+        # Assume it is a filename.
+        f = open(fileobj, "wb")
+
+    # Write the PNG header.
+    png_header = b"\x89PNG\x0D\x0A\x1A\x0A"
+    f.write(png_header)
+
+    # Write the chunks...
+
+    # IHDR chunk
+    if bitdepth is not None:
+        nbits = bitdepth
+    else:
+        nbits = a.dtype.itemsize*8
+    _write_ihdr(f, a.shape[1], a.shape[0], nbits, color_type)
+
+    # tEXt chunks, if any.
+    if text_list is not None:
+        for keyword, text_string in text_list:
+            _write_text(f, keyword, text_string)
+
+    # PLTE chunk, if requested.
+    if color_type == 3:
+        _write_plte(f, palette)
+
+    # tRNS chunk, if there is one.
+    if trans is not None:
+        _write_trns(f, trans)
+
+    # acTL chunk
+    _write_actl(f, num_frames, num_plays)
+
+    # fcTL chunk for the first frame
+    sequence_number = 0
+    _write_fctl(f, sequence_number=sequence_number,
+                width=a.shape[1], height=a.shape[0],
+                x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
+                dispose_op=0, blend_op=1)
+
+    # IDAT chunk for the first frame
+    if bitdepth is not None:
+        data = _pack(a, bitdepth)
+    else:
+        data = a
+    stream = _create_stream(data)
+    zstream = _zlib.compress(stream)
+    _write_idat(f, zstream)
+
+    for a in seq[1:]:
+        # fcTL chunk for the next frame
+        sequence_number += 1
+        _write_fctl(f, sequence_number=sequence_number,
+                    width=a.shape[1], height=a.shape[0],
+                    x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
+                    dispose_op=0, blend_op=1)
+
+        # fdAT chunk for the next frame
+        sequence_number += 1
+        if bitdepth is not None:
+            data = _pack(a, bitdepth)
+        else:
+            data = a
+        stream = _create_stream(data)
+        zstream = _zlib.compress(stream)
+        _write_fdat(f, sequence_number, zstream)
 
     # IEND chunk
     _write_iend(f)
