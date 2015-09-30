@@ -123,6 +123,78 @@ def _write_iend(f):
     _write_chunk(f, b"IEND", b"")
 
 
+def _write_actl(f, num_frames, num_plays):
+    """Write an acTL chunk to `f`."""
+    if num_frames < 1:
+        raise ValueError("Attempt to create acTL chunk with num_frames (%i) "
+                         "less than 1." % (num_frames,))
+    chunk_data = _struct.pack("!II", num_frames, num_plays)
+    _write_chunk(f, b"acTL", chunk_data)
+
+
+def _write_fctl(f, sequence_number, width, height, x_offset, y_offset,
+                delay_num, delay_den, dispose_op=0, blend_op=0):
+    """Write an fcTL chunk to `f`."""
+    if width < 1:
+        raise ValueError("width must be greater than 0")
+    if height < 1:
+        raise ValueError("heigt must be greater than 0")
+    if x_offset < 0:
+        raise ValueError("x_offset must be nonnegative")
+    if y_offset < 0:
+        raise ValueError("y_offset must be nonnegative")
+
+    fmt = "!IIIIIHHBB"
+    chunk_data = _struct.pack(fmt, sequence_number, width, height,
+                              x_offset, y_offset, delay_num, delay_den,
+                              dispose_op, blend_op)
+    _write_chunk(f, b"fcTL", chunk_data)
+
+
+def _write_fdat(f, sequence_number, data):
+    """Write an fdAT chunk to `f`."""
+    seq = _struct.pack("!I", sequence_number)
+    _write_chunk(f, b"fdAT", seq + data)
+
+
+def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None):
+    """
+    Write the image data in the array `a` to the file, using IDAT chunks
+    if sequence_number is None and fdAT chunks otherwise.
+
+    `f` must be a writable file object.
+    `a` must be a numpy array to be written to the file `f`.
+    If `sequence_number` is None, 'IDAT' chunks are written.
+    If `sequence_number` is not None, `fdAT` chunks are written.
+
+    Returns the number of chunks written to the file.
+    """
+    if bitdepth is not None:
+        data = _pack(a, bitdepth)
+    else:
+        data = a
+    stream = _create_stream(data)
+    zstream = _zlib.compress(stream)
+
+    if max_chunk_len is None:
+        max_chunk_len = len(zstream)
+    elif max_chunk_len < 1:
+        raise ValueError("max_chunk_len must be at least 1.")
+
+    num_data_chunks = (len(zstream) + max_chunk_len - 1) // max_chunk_len
+    for k in range(num_data_chunks):
+        start = k * max_chunk_len
+        end = min(start + max_chunk_len, len(zstream))
+        data = zstream[start:end]
+        if sequence_number is None:
+            _write_idat(f, data)
+        else:
+            _write_fdat(f, sequence_number, data)
+            sequence_number += 1
+
+    return num_data_chunks
+
+
 def _validate_text(text_list):
     if text_list is None:
         return
@@ -232,8 +304,21 @@ def _get_color_type(a, use_palette):
     return color_type
 
 
+def _validate_bitdepth(bitdepth, a, color_type):
+    if bitdepth is not None:
+        if a.dtype != _np.uint8:
+            raise ValueError('Input array must have dtype uint8 when '
+                             'bitdepth < 8 is given.')
+        if bitdepth not in [1, 2, 4, 8]:
+            raise ValueError('bitdepth %i is not valid.  Valid values are '
+                             '1, 2, 4 or 8' % (bitdepth,))
+        if color_type != 0:
+            raise ValueError('bitdepth may only be specified for grayscale '
+                             'images with no alpha channel')
+
+
 def write_png(fileobj, a, text_list=None, use_palette=False,
-              transparent=None, idatmax=None, bitdepth=None):
+              transparent=None,  bitdepth=None, max_chunk_len=None):
     """
     Write a numpy array to a PNG file.
 
@@ -261,16 +346,16 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         can be used to specify a single color that is to be considered the
         transparent color.  This argument is ignored if `a` includes an
         alpha channel.
-    idatmax : integer, optional
-        The data in a PNG file is stored in records called IDAT chunks.
-        `idatmax` sets the maximum number of data bytes to stored in each IDAT
-        chunk.  The default is None, which means that all the data is written
-        to a single IDAT chunk.
     bitdepth : integer, optional
         Bit depth of the output image.  Valid values are 1, 2, 4 and 8.
         Only valid for grayscale images with no alpha channel with an input
         array having dtype numpy.uint8.  If not given, the bit depth is
         inferred from the data type of the input array `a`.
+    max_chunk_len : integer, optional
+        The data in a PNG file is stored in records called IDAT chunks.
+        `max_chunk_len` sets the maximum number of data bytes to stored in
+        each IDAT chunk.  The default is None, which means that all the data
+        is written to a single IDAT chunk.
 
     Notes
     -----
@@ -316,11 +401,12 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given
             # a color value that should be considered to be transparent.
-            palette_index = _np.nonzero((palette == transparent).all(axis=1))[0]
-            if palette_index.size > 0:
-                if palette_index.size > 1:
-                    raise ValueError("Only one transparent color may be given.")
-                trans = _np.zeros(palette_index[0]+1, dtype=_np.uint8)
+            pal_index = _np.nonzero((palette == transparent).all(axis=1))[0]
+            if pal_index.size > 0:
+                if pal_index.size > 1:
+                    raise ValueError("Only one transparent color may "
+                                     "be given.")
+                trans = _np.zeros(pal_index[0]+1, dtype=_np.uint8)
                 trans[:-1] = 255
 
     elif (color_type == 0 or color_type == 2) and transparent is not None:
@@ -330,16 +416,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if bitdepth == 8 and a.dtype == _np.uint8:
         bitdepth = None
 
-    if bitdepth is not None:
-        if a.dtype != _np.uint8:
-            raise ValueError('Input array must have dtype uint8 when '
-                             'bitdepth < 8 is given.')
-        if bitdepth not in [1, 2, 4, 8]:
-            raise ValueError('bitdepth %i is not valid.  Valid values are '
-                             '1, 2, 4 or 8' % (bitdepth,))
-        if color_type != 0:
-            raise ValueError('bitdepth may only be specified for grayscale '
-                             'images with no alpha channel')
+    _validate_bitdepth(bitdepth, a, color_type)
 
     if hasattr(fileobj, 'write'):
         # Assume it is a file-like object with a write method.
@@ -374,23 +451,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if trans is not None:
         _write_trns(f, trans)
 
-    # IDAT chunk(s)
-    if bitdepth is not None:
-        data = _pack(a, bitdepth)
-    else:
-        data = a
-    stream = _create_stream(data)
-    zstream = _zlib.compress(stream)
-    if idatmax is None:
-        _write_idat(f, zstream)
-    else:
-        if idatmax < 1:
-            raise ValueError("idatmax must be at least 1.")
-        num_idat_chunks = (len(zstream) + idatmax - 1) // idatmax
-        for k in range(num_idat_chunks):
-            start = k*idatmax
-            end = min(start + idatmax, len(zstream))
-            _write_idat(f, zstream[start:end])
+    # _write_data(...) writes the IDAT chunk(s).
+    _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len)
 
     # IEND chunk
     _write_iend(f)
@@ -399,44 +461,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         f.close()
 
 
-def _write_actl(f, num_frames, num_plays):
-    """Write an acTL chunk to `f`."""
-    if num_frames < 1:
-        raise ValueError("Attempt to create acTL chunk with num_frames (%i) "
-                         "less than 1." % (num_frames,))
-    chunk_data = _struct.pack("!II", num_frames, num_plays)
-    _write_chunk(f, b"acTL", chunk_data)
-
-
-def _write_fctl(f, sequence_number, width, height, x_offset, y_offset,
-                delay_num, delay_den, dispose_op=0, blend_op=0):
-    """Write an fcTL chunk to `f`."""
-    if width < 1:
-        raise ValueError("width must be greater than 0")
-    if height < 1:
-        raise ValueError("heigt must be greater than 0")
-    if x_offset < 0:
-        raise ValueError("x_offset must be nonnegative")
-    if y_offset < 0:
-        raise ValueError("y_offset must be nonnegative")
-
-    fmt = "!IIIIIHHBB"
-    chunk_data = _struct.pack(fmt, sequence_number, width, height,
-                              x_offset, y_offset, delay_num, delay_den,
-                              dispose_op, blend_op)
-    _write_chunk(f, b"fcTL", chunk_data)
-
-
-def _write_fdat(f, sequence_number, data):
-    """Write an fdAT chunk to `f`."""
-    seq = _struct.pack("!I", sequence_number)
-    _write_chunk(f, b"fdAT", seq + data)
-
-
-# TODO: Clean up repeated code in write_png() write_apng().
-
 def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
-               use_palette=False, transparent=None, bitdepth=None):
+               use_palette=False, transparent=None, bitdepth=None,
+               max_chunk_len=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -474,6 +501,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
         Only valid for grayscale images with no alpha channel with an input
         array having dtype numpy.uint8.  If not given, the bit depth is
         inferred from the data type of the input arrays.
+    max_chunk_len : integer, optional
+        The data in a PNG file is stored in records called IDAT and fdAT
+        chunks.  `max_chunk_len` sets the maximum number of data bytes to
+        stored in each chunk.  The default is None, which means that all the
+        data from a frame is written to a single IDAT or fdAT chunk.
     """
     num_frames = len(seq)
     if num_frames == 0:
@@ -503,7 +535,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
     if color_type == 3:
         # The array is 8 bit RGB or RGBA, and a palette is to be created.
 
-        # Note that this replaces `a` with the index array.
+        # Put all the input arrays into a single numpy array, so we have
+        # a single array to pass to _palettize().
         seq = _np.array(seq)
         seq, palette, trans = _palettize(seq)
         a = seq[0]
@@ -515,11 +548,12 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given
             # a color value that should be considered to be transparent.
-            palette_index = _np.nonzero((palette == transparent).all(axis=1))[0]
-            if palette_index.size > 0:
-                if palette_index.size > 1:
-                    raise ValueError("Only one transparent color may be given.")
-                trans = _np.zeros(palette_index[0]+1, dtype=_np.uint8)
+            pal_index = _np.nonzero((palette == transparent).all(axis=1))[0]
+            if pal_index.size > 0:
+                if pal_index.size > 1:
+                    raise ValueError("Only one transparent color may "
+                                     "be given.")
+                trans = _np.zeros(pal_index[0]+1, dtype=_np.uint8)
                 trans[:-1] = 255
 
     elif (color_type == 0 or color_type == 2) and transparent is not None:
@@ -529,16 +563,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
     if bitdepth == 8 and a.dtype == _np.uint8:
         bitdepth = None
 
-    if bitdepth is not None:
-        if a.dtype != _np.uint8:
-            raise ValueError('Input arrays must have dtype uint8 when '
-                             'bitdepth < 8 is given.')
-        if bitdepth not in [1, 2, 4, 8]:
-            raise ValueError('bitdepth %i is not valid.  Valid values are '
-                             '1, 2, 4 or 8' % (bitdepth,))
-        if color_type != 0:
-            raise ValueError('bitdepth may only be specified for grayscale '
-                             'images with no alpha channel')
+    _validate_bitdepth(bitdepth, a, color_type)
 
     if hasattr(fileobj, 'write'):
         # Assume it is a file-like object with a write method.
@@ -582,33 +607,23 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
                 width=a.shape[1], height=a.shape[0],
                 x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
                 dispose_op=0, blend_op=1)
+    sequence_number += 1
 
-    # IDAT chunk for the first frame
-    if bitdepth is not None:
-        data = _pack(a, bitdepth)
-    else:
-        data = a
-    stream = _create_stream(data)
-    zstream = _zlib.compress(stream)
-    _write_idat(f, zstream)
+    # IDAT chunk(s) for the first frame (no sequence_number)
+    _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len)
 
     for a in seq[1:]:
         # fcTL chunk for the next frame
-        sequence_number += 1
         _write_fctl(f, sequence_number=sequence_number,
                     width=a.shape[1], height=a.shape[0],
                     x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
                     dispose_op=0, blend_op=1)
-
-        # fdAT chunk for the next frame
         sequence_number += 1
-        if bitdepth is not None:
-            data = _pack(a, bitdepth)
-        else:
-            data = a
-        stream = _create_stream(data)
-        zstream = _zlib.compress(stream)
-        _write_fdat(f, sequence_number, zstream)
+
+        # fdAT chunk(s) for the next frame
+        num_chunks = _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
+                                 sequence_number=sequence_number)
+        sequence_number += num_chunks
 
     # IEND chunk
     _write_iend(f)
