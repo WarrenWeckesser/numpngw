@@ -109,7 +109,7 @@ two squares are transparent.
 Example 4
 ---------
 
-The following script uses the `use_palette=True` option to create this 8-bit
+The following script uses the option `use_palette=True` to create this 8-bit
 indexed RGB file.
 
 ![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example4.png)
