@@ -14,9 +14,8 @@ Limitations:
 * _write_text requires the text string to be ASCII.  This might
   be too strong of a requirement.
 * Channel bit depths of 1, 2, or 4 are supported for input arrays
-  with dtype np.uint8, but this could be made more flexible (i.e.
-  just do the right thing with bitdepth=8, etc).  Only color_type 0
-  allows smaller bit depths.
+  with dtype np.uint8, but this could be made more flexible.
+  Only color_type 0 allows smaller bit depths.
 * When bitdepth is given, the values are assumed to be within the
   range of given.  Higher bits are ignored.
 
@@ -176,7 +175,12 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None):
     stream = _create_stream(data)
     zstream = _zlib.compress(stream)
 
+    # zstream is a string containing the packed, compressed version of the
+    # data from the array `a`.  This will be written to the file in one or
+    # more IDAT or fdAT chunks.
+
     if max_chunk_len is None:
+        # Put the whole thing in one chunk.
         max_chunk_len = len(zstream)
     elif max_chunk_len < 1:
         raise ValueError("max_chunk_len must be at least 1.")
@@ -393,6 +397,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
         # Note that this replaces `a` with the index array.
         a, palette, trans = _palettize(a)
+        # `a` has the same shape as before, but now it is an array of indices
+        # into the array `palette`, which contains the colors.  `trans` is
+        # either None (if there was no alpha channel), or an array the same
+        # length as `palette` containing the alpha values of the colors.
         if len(palette) > 256:
             raise ValueError("The array has %d colors.  No more than 256 "
                              "colors are allowed when using a palette." %
@@ -461,8 +469,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         f.close()
 
 
-def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
-               use_palette=False, transparent=None, bitdepth=None,
+def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
+               text_list=None, use_palette=False,
+               transparent=None, bitdepth=None,
                max_chunk_len=None):
     """
     Write an APNG file from a sequence of numpy arrays.
@@ -480,6 +489,12 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
     num_plays : int
         The number of times to repeat the animation.  If 0, the animate
         is repeated indefinitely.
+    include_first_frame : bool
+        The first frame is the image that is displayed by a renderer that does
+        not support APNG.  If `include_first_frame` is True, the first frame
+        in `seq` is also included in the animation.  If it is False, the first
+        frame is not part of the animation, so it will only be seen by users
+        of renderers that do not support APNG.
     text_list : list of (keyword, text) tuples, optional
         Each tuple is written to the file as a 'tEXt' chunk.
     use_palette : bool, optional
@@ -539,6 +554,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
         # a single array to pass to _palettize().
         seq = _np.array(seq)
         seq, palette, trans = _palettize(seq)
+        # seq has the same shape as before, but now it is an array of indices
+        # into the array `palette`, which contains the colors.  `trans` is
+        # either None (if there was no alpha channel), or an array the same
+        # length as `palette` containing the alpha values of the colors.
         a = seq[0]
         if len(palette) > 256:
             raise ValueError("The input has %d colors.  No more than 256 "
@@ -564,6 +583,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
         bitdepth = None
 
     _validate_bitdepth(bitdepth, a, color_type)
+
+    # --- Open and write the file ---------
 
     if hasattr(fileobj, 'write'):
         # Assume it is a file-like object with a write method.
@@ -601,13 +622,15 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, text_list=None,
     # acTL chunk
     _write_actl(f, num_frames, num_plays)
 
-    # fcTL chunk for the first frame
     sequence_number = 0
-    _write_fctl(f, sequence_number=sequence_number,
-                width=a.shape[1], height=a.shape[0],
-                x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
-                dispose_op=0, blend_op=1)
-    sequence_number += 1
+
+    if include_first_frame:
+        # fcTL chunk for the first frame
+        _write_fctl(f, sequence_number=sequence_number,
+                    width=a.shape[1], height=a.shape[0],
+                    x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
+                    dispose_op=0, blend_op=1)
+        sequence_number += 1
 
     # IDAT chunk(s) for the first frame (no sequence_number)
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len)
