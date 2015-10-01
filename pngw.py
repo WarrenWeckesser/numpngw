@@ -51,6 +51,7 @@ from __future__ import (division as _division,
 
 import struct as _struct
 import zlib as _zlib
+from fractions import Fraction
 import numpy as _np
 
 
@@ -469,6 +470,35 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         f.close()
 
 
+def _msec_to_numden(delay):
+    """
+    delay is the time delay in milliseconds.
+
+    Return value is the tuple (delay_num, delay_den) representing
+    the delay in seconds as the fraction delay_num/delay_den.
+    Each value in the tuple is an integer less than 65536.
+    """
+    if delay == 0:
+        return (0, 1)
+    # Convert delay to seconds.
+    delay = delay/1000.0
+    if delay > 1:
+        f = Fraction.from_float(1.0/delay).limit_denominator(65535)
+        num = f.denominator
+        den = f.numerator
+    else:
+        f = Fraction.from_float(delay).limit_denominator(65535)
+        num = f.numerator
+        den = f.denominator
+    if (num, den) == (1, 0):
+        raise ValueError("delay=%r is too large to convert to "
+                         "delay_num/delay_den" % (delay,))
+    if (num, den) == (0, 1):
+        raise ValueError("delay=%r is too small to convert to "
+                         "delay_num/delay_den" % (delay,))
+    return num, den
+
+
 def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
@@ -622,13 +652,18 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     # acTL chunk
     _write_actl(f, num_frames, num_plays)
 
+    # Convert delay (which is milliseconds) to the number of
+    # seconds expressed as the fraction delay_num/delay_den.
+    delay_num, delay_den = _msec_to_numden(delay)
+
     sequence_number = 0
 
     if include_first_frame:
         # fcTL chunk for the first frame
         _write_fctl(f, sequence_number=sequence_number,
                     width=a.shape[1], height=a.shape[0],
-                    x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
+                    x_offset=0, y_offset=0,
+                    delay_num=delay_num, delay_den=delay_den,
                     dispose_op=0, blend_op=1)
         sequence_number += 1
 
@@ -639,7 +674,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         # fcTL chunk for the next frame
         _write_fctl(f, sequence_number=sequence_number,
                     width=a.shape[1], height=a.shape[0],
-                    x_offset=0, y_offset=0, delay_num=delay, delay_den=1000,
+                    x_offset=0, y_offset=0,
+                    delay_num=delay_num, delay_den=delay_den,
                     dispose_op=0, blend_op=1)
         sequence_number += 1
 
