@@ -14,7 +14,7 @@ def next_chunk(s):
     chunk_type = s[4:8]
     chunk_data = s[8:8+chunk_len]
     crc = struct.unpack("!I", s[8+chunk_len:8+chunk_len+4])[0]
-    check = zlib.crc32(chunk_type + chunk_data)
+    check = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
     if crc != check:
         raise RuntimeError("CRC not correct, chunk_type=%r" % (chunk_type,))
     return chunk_type, chunk_data, s[8+chunk_len+4:]
