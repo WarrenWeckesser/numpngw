@@ -270,6 +270,13 @@ def _pack(a, bitdepth):
     return b
 
 
+def _unpack(p, bitdepth, width):
+    powers = _np.arange(bitdepth-1, -1, -1)
+    up = _np.unpackbits(p).reshape(p.shape[0], -1, bitdepth).dot(2**powers)
+    a = up[:, :width]
+    return a
+
+
 def _validate_array(a):
     if a.ndim != 2:
         if a.ndim != 3 or a.shape[2] > 4 or a.shape[2] == 0:
