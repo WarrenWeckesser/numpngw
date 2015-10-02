@@ -531,7 +531,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     delay : scalar
         The time delay between frames, in milliseconds.
     num_plays : int
-        The number of times to repeat the animation.  If 0, the animate
+        The number of times to repeat the animation.  If 0, the animation
         is repeated indefinitely.
     include_first_frame : bool
         The first frame is the image that is displayed by a renderer that does
@@ -561,7 +561,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         array having dtype numpy.uint8.  If not given, the bit depth is
         inferred from the data type of the input arrays.
     max_chunk_len : integer, optional
-        The data in a PNG file is stored in records called IDAT and fdAT
+        The data in a APNG file is stored in records called IDAT and fdAT
         chunks.  `max_chunk_len` sets the maximum number of data bytes to
         stored in each chunk.  The default is None, which means that all the
         data from a frame is written to a single IDAT or fdAT chunk.
