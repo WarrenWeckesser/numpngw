@@ -3,7 +3,7 @@ pngw
 
 This python package defines the function `write_png` that writes a
 numpy array to a PNG file, and the function `write_apng` that writes
-a sequences of arrays to an APNG file.
+a sequence of arrays to an APNG file.
 
 Capabilities of `write_png` include:
 
@@ -17,11 +17,14 @@ Capabilities of `write_png` include:
 This is prototype-quality software.  The documentation is sparse, and the API
 will likely change.
 
-For packages with more features (including functions for *reading* PNG files),
-take a look at `pypng` (https://pypi.python.org/pypi/pypng) or `imageio`
-(https://pypi.python.org/pypi/imageio).
-
 This software is released under the BSD 2-clause license.
+
+For packages with more features (including functions for *reading* PNG files),
+take a look at:
+
+* `pypng` (https://pypi.python.org/pypi/pypng) or
+* `imageio` (https://pypi.python.org/pypi/imageio).
+
 
 Example 1
 ---------
@@ -151,7 +154,12 @@ indexed RGB file.
 Example 5
 ---------
 
-This APNG file is created by the following script.
+This animated PNG file is created by the following script.
+As in the other examples, most of script is code that generates
+the data to be saved.  The line that creates the PNG file is
+simply
+
+    write_apng("example5.png", seq, delay=50, use_palette=True)
 
 ![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example5.png)
 
