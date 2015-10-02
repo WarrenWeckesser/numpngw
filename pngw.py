@@ -417,6 +417,13 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given
             # a color value that should be considered to be transparent.
+            # We construct an array `trans` of alpha values, and set the
+            # alpha of the color that is to be transparent to 0.  All other
+            # alpha values are set to 255 (fully opaque).
+            # `trans` only has entries for colors in the palette up to the
+            # given `transparent` color, so `trans` is not the same length as
+            # `palette` (unless the transparent color happens to be the last
+            # color in the pallete).
             pal_index = _np.nonzero((palette == transparent).all(axis=1))[0]
             if pal_index.size > 0:
                 if pal_index.size > 1:

@@ -5,7 +5,7 @@ import io
 import struct
 import zlib
 import numpy as np
-from numpy.testing import assert_array_equal, assert_equal
+from numpy.testing import assert_, assert_equal, assert_array_equal
 import pngw
 
 
@@ -38,6 +38,31 @@ def check_ihdr(file_contents, width, height, bit_depth, color_type,
     return file_contents
 
 
+def check_trns(file_contents, color_type, transparent):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"tRNS")
+    assert_(color_type not in [4, 6],
+            msg='Found tRNS chunk, but color_type is %r' % (color_type,))
+    if color_type == 0:
+        # Grayscale
+        trns = struct.unpack("!H", chunk_data)[0]
+        assert_equal(trns, transparent)
+    elif color_type == 2:
+        # RGB
+        trns = struct.unpack("!HHH", chunk_data)
+        assert_equal(trns, transparent)
+    elif color_type == 3:
+        # alphas for the first len(chunk_data) palette indices.
+        trns = np.fromstring(chunk_data, dtype=np.uint8)
+        # TODO: Write a test for the case use_palette=True and
+        #       transparent is not None.
+        assert_(False, msg="This test is not complete!")
+    else:
+        raise RuntimeError("check_trns called with invalid color_type %r" %
+                           (color_type,))
+    return file_contents
+
+
 def check_iend(file_contents):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IEND")
@@ -59,12 +84,93 @@ def parse_ihdr(chunk_data):
 class TestWritePng(unittest.TestCase):
 
     def test_write_png_nbit_grayscale(self):
+        # Test the creation of grayscale images for bit depths of 1, 2, 4
+        # and 8, with or without a `transparent` color selected.
         np.random.seed(123)
         for bitdepth in [1, 2, 4, 8]:
-            maxval = 2**bitdepth
-            img = np.random.randint(0, maxval, size=(3, 11)).astype(np.uint8)
+            for transparent in [None, 0]:
+                maxval = 2**bitdepth
+                img = np.random.randint(0, maxval, size=(3, 11))
+                img = img.astype(np.uint8)
+                if transparent is not None:
+                    img[2:4, 2:] = transparent
+
+                f = io.BytesIO()
+                pngw.write_png(f, img, bitdepth=bitdepth,
+                               transparent=transparent)
+
+                file_contents = f.getvalue()
+
+                file_contents = check_signature(file_contents)
+
+                file_contents = check_ihdr(file_contents,
+                                           width=img.shape[1],
+                                           height=img.shape[0],
+                                           bit_depth=bitdepth, color_type=0)
+
+                if transparent is not None:
+                    file_contents = check_trns(file_contents, color_type=0,
+                                               transparent=transparent)
+
+                # Check the IDAT chunk.
+                chunk_type, chunk_data, file_contents = \
+                    next_chunk(file_contents)
+                self.assertEqual(chunk_type, b"IDAT")
+                decompressed = zlib.decompress(chunk_data)
+                b = np.fromstring(decompressed, dtype=np.uint8)
+                ncols, rembits = divmod(img.shape[1]*bitdepth, 8)
+                ncols += rembits > 0
+                lines = b.reshape(img.shape[0], ncols + 1)
+                expected_col0 = np.zeros(img.shape[0], dtype=np.uint8)
+                assert_array_equal(lines[:, 0], expected_col0)
+                p = lines[:, 1:]
+                img2 = pngw._unpack(p, bitdepth=bitdepth, width=img.shape[1])
+                assert_array_equal(img2, img)
+
+                check_iend(file_contents)
+
+    def test_write_png_8bit_RGBA(self):
+        w = 25
+        h = 15
+        np.random.seed(12345)
+        img = np.random.randint(0, 256, size=(h, w, 4)).astype(np.uint8)
+        f = io.BytesIO()
+        pngw.write_png(f, img)
+
+        file_contents = f.getvalue()
+
+        file_contents = check_signature(file_contents)
+
+        file_contents = check_ihdr(file_contents,
+                                   width=img.shape[1], height=img.shape[0],
+                                   bit_depth=8, color_type=6)
+
+        # Check the IDAT chunk.
+        chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+        self.assertEqual(chunk_type, b"IDAT")
+        decompressed = zlib.decompress(chunk_data)
+        b = np.fromstring(decompressed, dtype=np.uint8)
+        lines = b.reshape(img.shape[0], 4*img.shape[1]+1)
+        expected_col0 = np.zeros(img.shape[0], dtype=np.uint8)
+        assert_array_equal(lines[:, 0], expected_col0)
+        img2 = lines[:, 1:].reshape(img.shape)
+        assert_array_equal(img2, img2)
+
+        check_iend(file_contents)
+
+    def test_write_png_8bit_RGB(self):
+        # Test creation of an 8 bit RGB file (color type 2), with and without
+        # a `transparent` color selected.
+        w = 24
+        h = 10
+        np.random.seed(12345)
+        for transparent in [None, (0, 0, 0)]:
+            img = np.random.randint(0, 256, size=(h, w, 3)).astype(np.uint8)
+            if transparent:
+                img[2:4, 2:4] = transparent
+
             f = io.BytesIO()
-            pngw.write_png(f, img, bitdepth=bitdepth)
+            pngw.write_png(f, img, transparent=transparent)
 
             file_contents = f.getvalue()
 
@@ -72,25 +178,26 @@ class TestWritePng(unittest.TestCase):
 
             file_contents = check_ihdr(file_contents,
                                        width=img.shape[1], height=img.shape[0],
-                                       bit_depth=bitdepth, color_type=0)
+                                       bit_depth=8, color_type=2)
+
+            if transparent:
+                file_contents = check_trns(file_contents, color_type=2,
+                                           transparent=transparent)
 
             # Check the IDAT chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
             self.assertEqual(chunk_type, b"IDAT")
             decompressed = zlib.decompress(chunk_data)
             b = np.fromstring(decompressed, dtype=np.uint8)
-            ncols, rembits = divmod(img.shape[1]*bitdepth, 8)
-            ncols += rembits > 0
-            lines = b.reshape(img.shape[0], ncols + 1)
+            lines = b.reshape(img.shape[0], 3*img.shape[1]+1)
             expected_col0 = np.zeros(img.shape[0], dtype=np.uint8)
             assert_array_equal(lines[:, 0], expected_col0)
-            p = lines[:, 1:]
-            img2 = pngw._unpack(p, bitdepth=bitdepth, width=img.shape[1])
-            assert_array_equal(img2, img)
+            img2 = lines[:, 1:].reshape(img.shape)
+            assert_array_equal(img2, img2)
 
             check_iend(file_contents)
 
-    def test_write_png_4x5_8bit_RGB_palette(self):
+    def test_write_png_8bit_RGB_palette(self):
         img = np.arange(4*5*3, dtype=np.uint8).reshape(4, 5, 3)
         f = io.BytesIO()
         pngw.write_png(f, img, use_palette=True)
