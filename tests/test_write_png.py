@@ -58,30 +58,7 @@ def parse_ihdr(chunk_data):
 
 class TestWritePng(unittest.TestCase):
 
-    def test_write_png_2x3_8bit_grayscale(self):
-        img = np.array([[255, 0, 1], [240, 0, 127]], dtype=np.uint8)
-        f = io.BytesIO()
-        pngw.write_png(f, img)
-
-        file_contents = f.getvalue()
-
-        file_contents = check_signature(file_contents)
-
-        file_contents = check_ihdr(file_contents,
-                                   width=img.shape[1], height=img.shape[0],
-                                   bit_depth=8, color_type=0)
-
-        # Check the IDAT chunk.
-        chunk_type, chunk_data, file_contents = next_chunk(file_contents)
-        self.assertEqual(chunk_type, b"IDAT")
-        decompressed = zlib.decompress(chunk_data)
-        b = np.fromstring(decompressed, dtype=np.uint8)
-        lines = b.reshape(img.shape[0], img.shape[1]+1)
-        assert_array_equal(lines, np.hstack(([[0], [0]], img)))
-
-        check_iend(file_contents)
-
-    def test_write_png_2x3_nbit_grayscale(self):
+    def test_write_png_nbit_grayscale(self):
         np.random.seed(123)
         for bitdepth in [1, 2, 4, 8]:
             maxval = 2**bitdepth
