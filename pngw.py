@@ -1,6 +1,6 @@
 """
 write_png(...) writes a numpy array to a PNG file.
-write_apng(...) writes a sequenace of arrays to an APNG file.
+write_apng(...) writes a sequence of arrays to an APNG file.
 
 This code has no dependencies other than numpy and the python standard
 libraries.
@@ -16,8 +16,8 @@ Limitations:
 * Channel bit depths of 1, 2, or 4 are supported for input arrays
   with dtype np.uint8, but this could be made more flexible.
   Only color_type 0 allows smaller bit depths.
-* When bitdepth is given, the values are assumed to be within the
-  range of given.  Higher bits are ignored.
+* The values in the input array(s) are assumed to be within the
+  range of the given bit depth.  Higher bits are ignored.
 
 -----
 Copyright (c) 2015, Warren Weckesser
