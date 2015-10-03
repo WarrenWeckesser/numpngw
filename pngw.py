@@ -528,8 +528,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     ----------
     seq : sequence of numpy arrays
         All the arrays must have the same shape and dtype.
-    delay : scalar
+    delay : scalar, optional
         The time delay between frames, in milliseconds.
+        If `delay` is None (the default) or 0, the frames are played as
+        fast as possible.
     num_plays : int
         The number of times to repeat the animation.  If 0, the animation
         is repeated indefinitely.
@@ -569,6 +571,9 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     num_frames = len(seq)
     if num_frames == 0:
         raise ValueError("no frames given in `seq`")
+
+    if delay is None:
+        delay = 0
 
     if type(seq) == _np.ndarray:
         # seq is a single numpy array containing the frames.

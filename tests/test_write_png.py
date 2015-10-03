@@ -63,6 +63,26 @@ def check_trns(file_contents, color_type, transparent):
     return file_contents
 
 
+def check_actl(file_contents, num_frames, num_plays):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"acTL")
+    values = struct.unpack("!II", chunk_data)
+    assert_equal(values, (num_frames, num_plays))
+    return file_contents
+
+
+def check_fctl(file_contents, sequence_number, width, height,
+               x_offset=0, y_offset=0, delay_num=0, delay_den=1,
+               dispose_op=0, blend_op=1):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"fcTL")
+    values = struct.unpack("!IIIIIHHBB", chunk_data)
+    expected_values = (sequence_number, width, height, x_offset, y_offset,
+                       delay_num, delay_den, dispose_op, blend_op)
+    assert_equal(values, expected_values)
+    return file_contents
+
+
 def check_iend(file_contents):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IEND")
@@ -145,7 +165,7 @@ class TestWritePng(unittest.TestCase):
         expected_col0 = np.zeros(img.shape[0], dtype=np.uint8)
         assert_array_equal(lines[:, 0], expected_col0)
         img2 = lines[:, 1:].reshape(img.shape)
-        assert_array_equal(img2, img2)
+        assert_array_equal(img2, img)
 
         check_iend(file_contents)
 
@@ -184,7 +204,7 @@ class TestWritePng(unittest.TestCase):
             expected_col0 = np.zeros(img.shape[0], dtype=np.uint8)
             assert_array_equal(lines[:, 0], expected_col0)
             img2 = lines[:, 1:].reshape(img.shape)
-            assert_array_equal(img2, img2)
+            assert_array_equal(img2, img)
 
             check_iend(file_contents)
 
@@ -256,6 +276,67 @@ class TestWritePng(unittest.TestCase):
         self.assertEqual(chunk_data, b"")
 
         self.assertEqual(file_contents, b"")
+
+
+class TestWriteApng(unittest.TestCase):
+
+    def test_write_apng_8bit_RGBA(self):
+        num_frames = 4
+        w = 25
+        h = 15
+        np.random.seed(12345)
+        seq_size = (num_frames, h, w, 4)
+        seq = np.random.randint(0, 256, size=seq_size).astype(np.uint8)
+        f = io.BytesIO()
+        pngw.write_apng(f, seq)
+
+        file_contents = f.getvalue()
+
+        file_contents = check_signature(file_contents)
+
+        file_contents = check_ihdr(file_contents, width=w, height=h,
+                                   bit_depth=8, color_type=6)
+
+        file_contents = check_actl(file_contents, num_frames=4, num_plays=0)
+
+        sequence_number = 0
+        file_contents = check_fctl(file_contents,
+                                   sequence_number=sequence_number,
+                                   width=w, height=h)
+        sequence_number += 1
+
+        # Check the IDAT chunk.
+        chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+        self.assertEqual(chunk_type, b"IDAT")
+        decompressed = zlib.decompress(chunk_data)
+        b = np.fromstring(decompressed, dtype=np.uint8)
+        lines = b.reshape(h, 4*w+1)
+        expected_col0 = np.zeros(h, dtype=np.uint8)
+        assert_array_equal(lines[:, 0], expected_col0)
+        img2 = lines[:, 1:].reshape(h, w, 4)
+        assert_array_equal(img2, seq[0])
+
+        for k in range(1, 4):
+            file_contents = check_fctl(file_contents,
+                                       sequence_number=sequence_number,
+                                       width=w, height=h)
+            sequence_number += 1
+
+            # Check the fdAT chunk.
+            chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+            self.assertEqual(chunk_type, b"fdAT")
+            actual_seq_num = struct.unpack("!I", chunk_data[:4])[0]
+            self.assertEqual(actual_seq_num, sequence_number)
+            sequence_number += 1
+            decompressed = zlib.decompress(chunk_data[4:])
+            b = np.fromstring(decompressed, dtype=np.uint8)
+            lines = b.reshape(h, 4*w+1)
+            expected_col0 = np.zeros(h, dtype=np.uint8)
+            assert_array_equal(lines[:, 0], expected_col0)
+            img2 = lines[:, 1:].reshape(h, w, 4)
+            assert_array_equal(img2, seq[k])
+
+        check_iend(file_contents)
 
 
 if __name__ == '__main__':
