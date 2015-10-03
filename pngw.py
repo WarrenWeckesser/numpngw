@@ -52,6 +52,7 @@ from __future__ import (division as _division,
 import struct as _struct
 import zlib as _zlib
 from fractions import Fraction
+import time
 import numpy as _np
 
 
@@ -102,6 +103,12 @@ def _write_text(f, keyword, text_string):
     """
     data = keyword.encode('ascii') + b'\0' + text_string.encode('ascii')
     _write_chunk(f, b'tEXt', data)
+
+
+def _write_time(f, timestamp):
+    """Write a tIME chunk to `f`."""
+    chunk_data = _struct.pack('!HBBBBB', *timestamp)
+    _write_chunk(f, b'tIME', chunk_data)
 
 
 def _write_plte(f, palette):
@@ -334,8 +341,22 @@ def _validate_bitdepth(bitdepth, a, color_type):
                                  'bitdepth < 8 is given.')
 
 
+def _validate_timestamp(timestamp):
+    if timestamp is None:
+        return None
+    if isinstance(timestamp, time.struct_time):
+        return timestamp[:6]
+    if not isinstance(timestamp, tuple) or len(timestamp) != 6:
+        raise ValueError("The timestamp argument must be an instance of "
+                         "time.struct_time or a tuple of six integers "
+                         "representing the time as (year, month, day, "
+                         "hour, minute, second).")
+    return timestamp
+
+
 def write_png(fileobj, a, text_list=None, use_palette=False,
-              transparent=None,  bitdepth=None, max_chunk_len=None):
+              transparent=None,  bitdepth=None, max_chunk_len=None,
+              timestamp=None):
     """
     Write a numpy array to a PNG file.
 
@@ -373,6 +394,11 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         `max_chunk_len` sets the maximum number of data bytes to stored in
         each IDAT chunk.  The default is None, which means that all the data
         is written to a single IDAT chunk.
+    timestamp : tuple with length 6 or an instance of time.struct_time, optional
+        If this argument is not None, a 'tIME' chunk is included in the
+        PNG file.  The value can be either a tuple of six integers,
+        (year, month, day, hour, minute, second), or an instance of
+        time.struct_time (as returned, for example, by time.gmtime()).
 
     Notes
     -----
@@ -391,6 +417,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     _validate_array(a)
 
     _validate_text(text_list)
+
+    timestamp = _validate_timestamp(timestamp)
 
     # Determine color_type:
     #
@@ -471,6 +499,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         for keyword, text_string in text_list:
             _write_text(f, keyword, text_string)
 
+    if timestamp is not None:
+        _write_time(f, timestamp)
+
     # PLTE chunk, if requested.
     if color_type == 3:
         _write_plte(f, palette)
@@ -521,7 +552,7 @@ def _msec_to_numden(delay):
 def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
-               max_chunk_len=None):
+               max_chunk_len=None, timestamp=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -572,6 +603,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         chunks.  `max_chunk_len` sets the maximum number of data bytes to
         stored in each chunk.  The default is None, which means that all the
         data from a frame is written to a single IDAT or fdAT chunk.
+    timestamp : tuple with length 6 or an instance of time.struct_time, optional
+        If this argument is not None, a 'tIME' chunk is included in the
+        PNG file.  The value can be either a tuple of six integers,
+        (year, month, day, hour, minute, second), or an instance of
+        time.struct_time (as returned, for example, by time.gmtime()).
     """
     num_frames = len(seq)
     if num_frames == 0:
@@ -594,6 +630,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
             raise ValueError("all arrays in `seq` must have the same shape.")
 
     _validate_text(text_list)
+
+    timestamp = _validate_timestamp(timestamp)
 
     # Get the array for the first frame.
     a = seq[0]
@@ -664,6 +702,9 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     if text_list is not None:
         for keyword, text_string in text_list:
             _write_text(f, keyword, text_string)
+
+    if timestamp is not None:
+        _write_time(f, timestamp)
 
     # PLTE chunk, if requested.
     if color_type == 3:
