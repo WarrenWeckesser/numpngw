@@ -31,7 +31,7 @@ def check_ihdr(file_contents, width, height, bit_depth, color_type,
                compression_method=0, filter_method=0, interface_method=0):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IHDR")
-    values = parse_ihdr(chunk_data)
+    values = struct.unpack("!IIBBBBB", chunk_data)
     expected = (width, height, bit_depth, color_type, compression_method,
                 filter_method, interface_method)
     assert_equal(values, expected)
@@ -70,15 +70,6 @@ def check_iend(file_contents):
     # The IEND chunk is the last chunk, so file_contents should now
     # be empty.
     assert_equal(file_contents, b"")
-
-
-def parse_ihdr(chunk_data):
-    fmt = "!IIBBBBB"
-    values = struct.unpack(fmt, chunk_data)
-    # values are:
-    #    width, height, bit_depth, color_type,
-    #    compression_method, filter_method, interface_method
-    return values
 
 
 class TestWritePng(unittest.TestCase):
