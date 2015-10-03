@@ -169,7 +169,7 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None):
 
     Returns the number of chunks written to the file.
     """
-    if bitdepth is not None:
+    if bitdepth is not None and bitdepth < 8:
         data = _pack(a, bitdepth)
     else:
         data = a
@@ -318,15 +318,20 @@ def _get_color_type(a, use_palette):
 
 def _validate_bitdepth(bitdepth, a, color_type):
     if bitdepth is not None:
-        if a.dtype != _np.uint8:
-            raise ValueError('Input array must have dtype uint8 when '
-                             'bitdepth < 8 is given.')
-        if bitdepth not in [1, 2, 4, 8]:
-            raise ValueError('bitdepth %i is not valid.  Valid values are '
-                             '1, 2, 4 or 8' % (bitdepth,))
         if color_type != 0:
             raise ValueError('bitdepth may only be specified for grayscale '
                              'images with no alpha channel')
+        if bitdepth not in [1, 2, 4, 8, 16]:
+            raise ValueError('bitdepth %i is not valid.  Valid values are '
+                             '1, 2, 4, 8 or 16' % (bitdepth,))
+        if bitdepth == 16:
+            if a.dtype != _np.uint16:
+                raise ValueError('Input array must have dtype uint16 when '
+                                 'bitdepth=16 is given.')
+        else:
+            if a.dtype != _np.uint8:
+                raise ValueError('Input array must have dtype uint8 when '
+                                 'bitdepth < 8 is given.')
 
 
 def write_png(fileobj, a, text_list=None, use_palette=False,
