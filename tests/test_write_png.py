@@ -175,6 +175,16 @@ def check_time(file_contents, timestamp):
     return file_contents
 
 
+def check_gama(file_contents, gamma):
+    # gamma is the floating point gamma value.
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"gAMA")
+    gama = struct.unpack("!I", chunk_data)[0]
+    igamma = int(gamma*100000 + 0.5)
+    assert_equal(gama, igamma)
+    return file_contents
+
+
 def check_iend(file_contents):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IEND")
@@ -350,12 +360,13 @@ class TestWritePng(unittest.TestCase):
 
         self.assertEqual(file_contents, b"")
 
-    def test_write_png_timestamp(self):
+    def test_write_png_timestamp_gamma(self):
         np.random.seed(123)
         img = np.random.randint(0, 256, size=(10, 10)).astype(np.uint8)
         f = io.BytesIO()
         timestamp = (1452, 4, 15, 8, 9, 10)
-        pngw.write_png(f, img, timestamp=timestamp)
+        gamma = 2.2
+        pngw.write_png(f, img, timestamp=timestamp, gamma=gamma)
 
         file_contents = f.getvalue()
 
@@ -366,6 +377,8 @@ class TestWritePng(unittest.TestCase):
                                    bit_depth=8, color_type=0)
 
         file_contents = check_time(file_contents, timestamp)
+
+        file_contents = check_gama(file_contents, gamma)
 
         file_contents = check_idat(file_contents, color_type=0, bit_depth=8,
                                    img=img)

@@ -110,6 +110,13 @@ def _write_time(f, timestamp):
     _write_chunk(f, b'tIME', chunk_data)
 
 
+def _write_gama(f, gamma):
+    """Write a gAMA chunk to `f`."""
+    gama = int(gamma*100000 + 0.5)
+    chunk_data = _struct.pack('!I', gama)
+    _write_chunk(f, b'gAMA', chunk_data)
+
+
 def _write_plte(f, palette):
     _write_chunk(f, b"PLTE", palette.tostring())
 
@@ -350,7 +357,7 @@ def _validate_timestamp(timestamp):
 
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
-              timestamp=None):
+              timestamp=None, gamma=None):
     """
     Write a numpy array to a PNG file.
 
@@ -392,6 +399,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         If this argument is not None, a 'tIME' chunk is included in the
         PNG file.  The value must be a tuple of six integers: (year, month,
         day, hour, minute, second).
+    gamma : float, optional
+        If this argument is not None, a 'gAMA' chunk is included in the
+        PNG file.  The argument is expected to be a floating point value.
+        The value written in the 'gAMA' chunk is int(gamma*100000 + 0.5).
 
     Notes
     -----
@@ -495,6 +506,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if timestamp is not None:
         _write_time(f, timestamp)
 
+    if gamma is not None:
+        _write_gama(f, gamma)
+
     # PLTE chunk, if requested.
     if color_type == 3:
         _write_plte(f, palette)
@@ -545,7 +559,7 @@ def _msec_to_numden(delay):
 def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
-               max_chunk_len=None, timestamp=None):
+               max_chunk_len=None, timestamp=None, gamma=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -600,6 +614,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         If this argument is not None, a 'tIME' chunk is included in the
         PNG file.  The value must be a tuple of six integers: (year, month,
         day, hour, minute, second).
+    gamma : float, optional
+        If this argument is not None, a 'gAMA' chunk is included in the
+        PNG file.  The argument is expected to be a floating point value.
+        The value written in the 'gAMA' chunk is int(gamma*100000 + 0.5).
     """
     num_frames = len(seq)
     if num_frames == 0:
@@ -697,6 +715,9 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
 
     if timestamp is not None:
         _write_time(f, timestamp)
+
+    if gamma is not None:
+        _write_gama(f, gamma)
 
     # PLTE chunk, if requested.
     if color_type == 3:
