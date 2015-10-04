@@ -52,7 +52,6 @@ from __future__ import (division as _division,
 import struct as _struct
 import zlib as _zlib
 from fractions import Fraction
-import time
 import numpy as _np
 
 
@@ -344,13 +343,8 @@ def _validate_bitdepth(bitdepth, a, color_type):
 def _validate_timestamp(timestamp):
     if timestamp is None:
         return None
-    if isinstance(timestamp, time.struct_time):
-        return timestamp[:6]
-    if not isinstance(timestamp, tuple) or len(timestamp) != 6:
-        raise ValueError("The timestamp argument must be an instance of "
-                         "time.struct_time or a tuple of six integers "
-                         "representing the time as (year, month, day, "
-                         "hour, minute, second).")
+    if len(timestamp) != 6:
+        raise ValueError("timestamp must have length 6")
     return timestamp
 
 
@@ -394,11 +388,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         `max_chunk_len` sets the maximum number of data bytes to stored in
         each IDAT chunk.  The default is None, which means that all the data
         is written to a single IDAT chunk.
-    timestamp : tuple with length 6 or an instance of time.struct_time, optional
+    timestamp : tuple with length 6, optional
         If this argument is not None, a 'tIME' chunk is included in the
-        PNG file.  The value can be either a tuple of six integers,
-        (year, month, day, hour, minute, second), or an instance of
-        time.struct_time (as returned, for example, by time.gmtime()).
+        PNG file.  The value must be a tuple of six integers: (year, month,
+        day, hour, minute, second).
 
     Notes
     -----
@@ -603,11 +596,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         chunks.  `max_chunk_len` sets the maximum number of data bytes to
         stored in each chunk.  The default is None, which means that all the
         data from a frame is written to a single IDAT or fdAT chunk.
-    timestamp : tuple with length 6 or an instance of time.struct_time, optional
+    timestamp : tuple with length 6, optional
         If this argument is not None, a 'tIME' chunk is included in the
-        PNG file.  The value can be either a tuple of six integers,
-        (year, month, day, hour, minute, second), or an instance of
-        time.struct_time (as returned, for example, by time.gmtime()).
+        PNG file.  The value must be a tuple of six integers: (year, month,
+        day, hour, minute, second).
     """
     num_frames = len(seq)
     if num_frames == 0:

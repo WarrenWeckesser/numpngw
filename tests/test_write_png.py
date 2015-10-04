@@ -101,7 +101,7 @@ def stream_to_array(stream, width, height, color_type, bit_depth):
             img = p.reshape(-1, p.shape[1]//2, 2).dot(uint8to16)
         elif bit_depth == 8:
             img = p
-        else: # bit_depth is 1, 2 or 4.
+        else:  # bit_depth is 1, 2 or 4.
             img = pngw._unpack(p, bitdepth=bit_depth, width=width)
 
     elif color_type == 2:
@@ -164,6 +164,14 @@ def check_fctl(file_contents, sequence_number, width, height,
     expected_values = (sequence_number, width, height, x_offset, y_offset,
                        delay_num, delay_den, dispose_op, blend_op)
     assert_equal(values, expected_values)
+    return file_contents
+
+
+def check_time(file_contents, timestamp):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"tIME")
+    values = struct.unpack("!HBBBBB", chunk_data)
+    assert_equal(values, timestamp)
     return file_contents
 
 
@@ -249,7 +257,8 @@ class TestWritePng(unittest.TestCase):
         for transparent in [None, (0, 0, 0)]:
             for bit_depth in [8, 16]:
                 dt = np.uint16 if bit_depth == 16 else np.uint8
-                img = np.random.randint(0, 2**bit_depth, size=(h, w, 3)).astype(dt)
+                maxval = 2**bit_depth
+                img = np.random.randint(0, maxval, size=(h, w, 3)).astype(dt)
                 if transparent:
                     img[2:4, 2:4] = transparent
 
@@ -260,8 +269,7 @@ class TestWritePng(unittest.TestCase):
 
                 file_contents = check_signature(file_contents)
 
-                file_contents = check_ihdr(file_contents,
-                                           width=img.shape[1], height=img.shape[0],
+                file_contents = check_ihdr(file_contents, width=w, height=h,
                                            bit_depth=bit_depth, color_type=2)
 
                 if transparent:
@@ -342,6 +350,28 @@ class TestWritePng(unittest.TestCase):
 
         self.assertEqual(file_contents, b"")
 
+    def test_write_png_timestamp(self):
+        np.random.seed(123)
+        img = np.random.randint(0, 256, size=(10, 10)).astype(np.uint8)
+        f = io.BytesIO()
+        timestamp = (1452, 4, 15, 8, 9, 10)
+        pngw.write_png(f, img, timestamp=timestamp)
+
+        file_contents = f.getvalue()
+
+        file_contents = check_signature(file_contents)
+
+        file_contents = check_ihdr(file_contents,
+                                   width=img.shape[1], height=img.shape[0],
+                                   bit_depth=8, color_type=0)
+
+        file_contents = check_time(file_contents, timestamp)
+
+        file_contents = check_idat(file_contents, color_type=0, bit_depth=8,
+                                   img=img)
+
+        check_iend(file_contents)
+
 
 class TestWriteApng(unittest.TestCase):
 
@@ -370,7 +400,8 @@ class TestWriteApng(unittest.TestCase):
                                    width=w, height=h)
         sequence_number += 1
 
-        file_contents = check_idat(file_contents, color_type=6, bit_depth=8, img=seq[0])
+        file_contents = check_idat(file_contents, color_type=6, bit_depth=8,
+                                   img=seq[0])
 
         for k in range(1, 4):
             file_contents = check_fctl(file_contents,
