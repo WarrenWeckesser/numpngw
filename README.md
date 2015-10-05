@@ -3,7 +3,7 @@ pngw
 
 This python package defines the function `write_png` that writes a
 numpy array to a PNG file, and the function `write_apng` that writes
-a sequence of arrays to an APNG file.
+a sequence of arrays to an animated PNG (APNG) file.
 
 Capabilities of `write_png` include:
 
@@ -11,8 +11,8 @@ Capabilities of `write_png` include:
 * creation of 1-bit, 2-bit, 4-bit, 8-bit and 16-bit grayscale files;
 * creation of RGB and grayscale images with an alpha channel;
 * setting a transparent color;
-* automatic creation of a palette for an indexed file;
-* inclusion of `tEXt` chunks.
+* automatic creation of a palette for an indexed PNG file;
+* inclusion of `tEXt`, `tIME` and `gAMA` chunks.
 
 This is prototype-quality software.  The documentation is sparse, and the API
 will likely change.
