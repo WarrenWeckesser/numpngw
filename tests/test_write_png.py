@@ -405,7 +405,8 @@ class TestWriteApng(unittest.TestCase):
         file_contents = check_ihdr(file_contents, width=w, height=h,
                                    bit_depth=8, color_type=6)
 
-        file_contents = check_actl(file_contents, num_frames=4, num_plays=0)
+        file_contents = check_actl(file_contents, num_frames=num_frames,
+                                   num_plays=0)
 
         sequence_number = 0
         file_contents = check_fctl(file_contents,
@@ -416,7 +417,57 @@ class TestWriteApng(unittest.TestCase):
         file_contents = check_idat(file_contents, color_type=6, bit_depth=8,
                                    img=seq[0])
 
-        for k in range(1, 4):
+        for k in range(1, num_frames):
+            file_contents = check_fctl(file_contents,
+                                       sequence_number=sequence_number,
+                                       width=w, height=h)
+            sequence_number += 1
+
+            # Check the fdAT chunk.
+            chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+            self.assertEqual(chunk_type, b"fdAT")
+            actual_seq_num = struct.unpack("!I", chunk_data[:4])[0]
+            self.assertEqual(actual_seq_num, sequence_number)
+            sequence_number += 1
+            decompressed = zlib.decompress(chunk_data[4:])
+            b = np.fromstring(decompressed, dtype=np.uint8)
+            lines = b.reshape(h, 4*w+1)
+            expected_col0 = np.zeros(h, dtype=np.uint8)
+            assert_array_equal(lines[:, 0], expected_col0)
+            img2 = lines[:, 1:].reshape(h, w, 4)
+            assert_array_equal(img2, seq[k])
+
+        check_iend(file_contents)
+
+    def test_default_image(self):
+        num_frames = 2
+        w = 16
+        h = 8
+        np.random.seed(12345)
+        seq_size = (num_frames, h, w, 4)
+        seq = np.random.randint(0, 256, size=seq_size).astype(np.uint8)
+        default_image = np.zeros((h, w, 4), dtype=np.uint8)
+
+        f = io.BytesIO()
+
+        pngw.write_apng(f, seq, default_image=default_image)
+
+        file_contents = f.getvalue()
+
+        file_contents = check_signature(file_contents)
+
+        file_contents = check_ihdr(file_contents, width=w, height=h,
+                                   bit_depth=8, color_type=6)
+
+        file_contents = check_actl(file_contents, num_frames=num_frames,
+                                   num_plays=0)
+
+        sequence_number = 0
+
+        file_contents = check_idat(file_contents, color_type=6, bit_depth=8,
+                                   img=default_image)
+
+        for k in range(0, num_frames):
             file_contents = check_fctl(file_contents,
                                        sequence_number=sequence_number,
                                        width=w, height=h)

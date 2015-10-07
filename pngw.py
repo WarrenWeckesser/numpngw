@@ -556,7 +556,7 @@ def _msec_to_numden(delay):
     return num, den
 
 
-def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
+def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None):
@@ -578,12 +578,12 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     num_plays : int
         The number of times to repeat the animation.  If 0, the animation
         is repeated indefinitely.
-    include_first_frame : bool
-        The first frame is the image that is displayed by a renderer that does
-        not support APNG.  If `include_first_frame` is True, the first frame
-        in `seq` is also included in the animation.  If it is False, the first
-        frame is not part of the animation, so it will only be seen by users
-        of renderers that do not support APNG.
+    default_image : numpy array
+        If this image is given, it is the image that is displayed by renderers
+        that do not support animated PNG files.  If the renderer does support
+        animation, this image is not shown.  If this argument is not given,
+        the image shown by renderers that do not support animation will be
+        `seq[0]`.
     text_list : list of (keyword, text) tuples, optional
         Each tuple is written to the file as a 'tEXt' chunk.
     use_palette : bool, optional
@@ -626,6 +626,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     if delay is None:
         delay = 0
 
+    # Validate seq
     if type(seq) == _np.ndarray:
         # seq is a single numpy array containing the frames.
         _validate_array(seq[0])
@@ -639,28 +640,42 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         if any(a.shape != seq[0].shape for a in seq[1:]):
             raise ValueError("all arrays in `seq` must have the same shape.")
 
+    # Validate default_image
+    if default_image is not None:
+        _validate_array(default_image)
+        if default_image.dtype != seq[0].dtype:
+            raise ValueError('default_image must have the same data type as '
+                             'the arrays in seq')
+        if default_image.shape != seq[0].shape:
+            raise ValueError('default_image must have the same shape as the '
+                             'arrays in seq')
+
     _validate_text(text_list)
 
     timestamp = _validate_timestamp(timestamp)
 
-    # Get the array for the first frame.
-    a = seq[0]
-
-    color_type = _get_color_type(a, use_palette)
+    color_type = _get_color_type(seq[0], use_palette)
 
     trans = None
     if color_type == 3:
         # The array is 8 bit RGB or RGBA, and a palette is to be created.
 
-        # Put all the input arrays into a single numpy array, so we have
-        # a single array to pass to _palettize().
-        seq = _np.array(seq)
-        seq, palette, trans = _palettize(seq)
-        # seq has the same shape as before, but now it is an array of indices
-        # into the array `palette`, which contains the colors.  `trans` is
-        # either None (if there was no alpha channel), or an array the same
-        # length as `palette` containing the alpha values of the colors.
-        a = seq[0]
+        if default_image is None:
+            # Ensure that seq is single numpy array that can be passed
+            # to _palettize().
+            seq = _np.array(seq)
+            seq, palette, trans = _palettize(seq)
+        else:
+            # Put default_image and seq into a single numpy array that can be
+            # passed to _palettize().
+            tmp = _np.insert(seq, 0, default_image, axis=0)
+            tmp, palette, trans = _palettize(tmp)
+            default_image = tmp[0]
+            seq = tmp[1:]
+        # seq and default_image have the same shapes as before, but now the
+        # the arrays hold indices into the array `palette`, which contains
+        # the colors.  `trans` is either None (if there was no alpha channel),
+        # or an array containing the alpha values of the colors.
         if len(palette) > 256:
             raise ValueError("The input has %d colors.  No more than 256 "
                              "colors are allowed when using a palette." %
@@ -681,10 +696,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
         # XXX Should do some validation of `transparent`...
         trans = _np.asarray(transparent, dtype=_np.uint16)
 
-    if bitdepth == 8 and a.dtype == _np.uint8:
+    if bitdepth == 8 and seq[0].dtype == _np.uint8:
         bitdepth = None
 
-    _validate_bitdepth(bitdepth, a, color_type)
+    _validate_bitdepth(bitdepth, seq[0], color_type)
 
     # --- Open and write the file ---------
 
@@ -705,8 +720,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
     if bitdepth is not None:
         nbits = bitdepth
     else:
-        nbits = a.dtype.itemsize*8
-    _write_ihdr(f, a.shape[1], a.shape[0], nbits, color_type)
+        nbits = seq[0].dtype.itemsize*8
+    _write_ihdr(f, seq[0].shape[1], seq[0].shape[0], nbits, color_type)
 
     # tEXt chunks, if any.
     if text_list is not None:
@@ -736,29 +751,33 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, include_first_frame=True,
 
     sequence_number = 0
 
-    if include_first_frame:
+    if default_image is None:
         # fcTL chunk for the first frame
         _write_fctl(f, sequence_number=sequence_number,
-                    width=a.shape[1], height=a.shape[0],
+                    width=seq[0].shape[1], height=seq[0].shape[0],
                     x_offset=0, y_offset=0,
                     delay_num=delay_num, delay_den=delay_den,
                     dispose_op=0, blend_op=1)
         sequence_number += 1
+        # IDAT chunk(s) for the first frame (no sequence_number)
+        _write_data(f, seq[0], bitdepth, max_chunk_len=max_chunk_len)
+        seq = seq[1:]
+    else:
+        # IDAT chunk(s) for the default image
+        _write_data(f, default_image, bitdepth, max_chunk_len=max_chunk_len)
 
-    # IDAT chunk(s) for the first frame (no sequence_number)
-    _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len)
-
-    for a in seq[1:]:
+    for frame in seq:
         # fcTL chunk for the next frame
         _write_fctl(f, sequence_number=sequence_number,
-                    width=a.shape[1], height=a.shape[0],
+                    width=frame.shape[1], height=frame.shape[0],
                     x_offset=0, y_offset=0,
                     delay_num=delay_num, delay_den=delay_den,
                     dispose_op=0, blend_op=1)
         sequence_number += 1
 
         # fdAT chunk(s) for the next frame
-        num_chunks = _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
+        num_chunks = _write_data(f, frame, bitdepth,
+                                 max_chunk_len=max_chunk_len,
                                  sequence_number=sequence_number)
         sequence_number += num_chunks
 
