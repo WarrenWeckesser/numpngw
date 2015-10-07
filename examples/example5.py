@@ -1,5 +1,5 @@
 import numpy as np
-from pngw import write_apng
+from numpngw import write_apng
 
 
 # Example 5

@@ -6,7 +6,7 @@ import struct
 import zlib
 import numpy as np
 from numpy.testing import assert_, assert_equal, assert_array_equal
-import pngw
+import numpngw
 
 
 def next_chunk(s):
@@ -102,7 +102,7 @@ def stream_to_array(stream, width, height, color_type, bit_depth):
         elif bit_depth == 8:
             img = p
         else:  # bit_depth is 1, 2 or 4.
-            img = pngw._unpack(p, bitdepth=bit_depth, width=width)
+            img = numpngw._unpack(p, bitdepth=bit_depth, width=width)
 
     elif color_type == 2:
         # RGB
@@ -209,8 +209,8 @@ class TestWritePng(unittest.TestCase):
                     img[2:4, 2:] = transparent
 
                 f = io.BytesIO()
-                pngw.write_png(f, img, bitdepth=bitdepth,
-                               transparent=transparent)
+                numpngw.write_png(f, img, bitdepth=bitdepth,
+                                  transparent=transparent)
 
                 file_contents = f.getvalue()
 
@@ -243,7 +243,7 @@ class TestWritePng(unittest.TestCase):
                 img = np.random.randint(0, 2**bit_depth,
                                         size=(h, w, num_channels)).astype(dt)
                 f = io.BytesIO()
-                pngw.write_png(f, img)
+                numpngw.write_png(f, img)
 
                 file_contents = f.getvalue()
 
@@ -273,7 +273,7 @@ class TestWritePng(unittest.TestCase):
                     img[2:4, 2:4] = transparent
 
                 f = io.BytesIO()
-                pngw.write_png(f, img, transparent=transparent)
+                numpngw.write_png(f, img, transparent=transparent)
 
                 file_contents = f.getvalue()
 
@@ -294,7 +294,7 @@ class TestWritePng(unittest.TestCase):
     def test_write_png_8bit_RGB_palette(self):
         img = np.arange(4*5*3, dtype=np.uint8).reshape(4, 5, 3)
         f = io.BytesIO()
-        pngw.write_png(f, img, use_palette=True)
+        numpngw.write_png(f, img, use_palette=True)
 
         file_contents = f.getvalue()
 
@@ -329,7 +329,7 @@ class TestWritePng(unittest.TestCase):
         max_chunk_len = 500
         img = np.random.randint(0, 256, size=(h, w)).astype(np.uint8)
         f = io.BytesIO()
-        pngw.write_png(f, img, max_chunk_len=max_chunk_len)
+        numpngw.write_png(f, img, max_chunk_len=max_chunk_len)
 
         file_contents = f.getvalue()
 
@@ -366,7 +366,7 @@ class TestWritePng(unittest.TestCase):
         f = io.BytesIO()
         timestamp = (1452, 4, 15, 8, 9, 10)
         gamma = 2.2
-        pngw.write_png(f, img, timestamp=timestamp, gamma=gamma)
+        numpngw.write_png(f, img, timestamp=timestamp, gamma=gamma)
 
         file_contents = f.getvalue()
 
@@ -396,7 +396,7 @@ class TestWriteApng(unittest.TestCase):
         seq_size = (num_frames, h, w, 4)
         seq = np.random.randint(0, 256, size=seq_size).astype(np.uint8)
         f = io.BytesIO()
-        pngw.write_apng(f, seq)
+        numpngw.write_apng(f, seq)
 
         file_contents = f.getvalue()
 
@@ -450,7 +450,7 @@ class TestWriteApng(unittest.TestCase):
 
         f = io.BytesIO()
 
-        pngw.write_apng(f, seq, default_image=default_image)
+        numpngw.write_apng(f, seq, default_image=default_image)
 
         file_contents = f.getvalue()
 

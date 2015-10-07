@@ -1,5 +1,5 @@
-pngw
-====
+numpngw
+=======
 
 This python package defines the function `write_png` that writes a
 numpy array to a PNG file, and the function `write_apng` that writes
@@ -31,10 +31,10 @@ Example 1
 
 The following script creates this PNG file, an 8-bit RGB image.
 
-![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example1.png)
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example1.png)
 
     import numpy as np
-    from pngw import write_png
+    from numpngw import write_png
 
 
     # Example 1
@@ -59,10 +59,10 @@ Example 2
 
 The following script creates this PNG file, a 1-bit grayscale image.
 
-![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example2.png)
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example2.png)
 
     import numpy as np
-    from pngw import write_png
+    from numpngw import write_png
 
     # Example 2
     #
@@ -86,11 +86,11 @@ The following script creates this PNG file, a 16-bit RGB file in which
 the value (0, 0, 0) is transparent.  It might not be obvious, but the
 two squares are transparent.
 
-![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example3.png)
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example3.png)
 
 
     import numpy as np
-    from pngw import write_png
+    from numpngw import write_png
 
     # Example 3
     #
@@ -124,10 +124,10 @@ Example 4
 The following script uses the option `use_palette=True` to create this 8-bit
 indexed RGB file.
 
-![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example4.png)
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example4.png)
 
     import numpy as np
-    from pngw import write_png
+    from numpngw import write_png
 
 
     # Example 4
@@ -160,11 +160,11 @@ simply
 
     write_apng("example5.png", seq, delay=50, use_palette=True)
 
-![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example5.png)
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example5.png)
 
 
     import numpy as np
-    from pngw import write_apng
+    from numpngw import write_apng
 
     # Example 5
     #
@@ -191,10 +191,10 @@ Another animated RGB PNG. In this example, the argument `seq`
 that is passed to `write_apng` is a numpy array with shape
 `(num_frames, height, width, 3)`.
 
-![](https://github.com/WarrenWeckesser/pngw/blob/master/examples/example6.png)
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example6.png)
 
     import numpy as np
-    from pngw import write_apng
+    from numpngw import write_apng
 
     # Example 6
     #
