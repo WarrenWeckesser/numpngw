@@ -55,7 +55,7 @@ from fractions import Fraction
 import numpy as _np
 
 
-__version__ = "0.0.1-dev0"
+__version__ = "0.0.1"
 
 
 def _create_stream(a):
