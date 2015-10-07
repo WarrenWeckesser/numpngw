@@ -460,7 +460,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
             # `trans` only has entries for colors in the palette up to the
             # given `transparent` color, so `trans` is not the same length as
             # `palette` (unless the transparent color happens to be the last
-            # color in the pallete).
+            # color in the palette).
             pal_index = _np.nonzero((palette == transparent).all(axis=1))[0]
             if pal_index.size > 0:
                 if pal_index.size > 1:
