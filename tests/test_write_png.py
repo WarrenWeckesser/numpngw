@@ -63,7 +63,19 @@ def check_trns(file_contents, color_type, transparent):
     return file_contents
 
 
-def check_idat(file_contents, color_type, bit_depth, img):
+def check_bkgd(file_contents, color, color_type):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"bKGD")
+    if color_type == 0 or color_type == 4:
+        color = struct.unpack("!H", chunk_data)
+    elif color_type == 2 or color_type == 6:
+        color = struct.unpack("!HHH", chunk_data)
+    else:
+        color = struct.unpack("B", chunk_data)
+    return file_contents
+
+
+def check_idat(file_contents, color_type, bit_depth, img, palette=None):
     # This function assumes the entire image is in the chunk.
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IDAT")
@@ -71,6 +83,8 @@ def check_idat(file_contents, color_type, bit_depth, img):
     stream = np.fromstring(decompressed, dtype=np.uint8)
     height, width = img.shape[:2]
     img2 = stream_to_array(stream, width, height, color_type, bit_depth)
+    if palette is not None:
+        img2 = palette[img2]
     assert_array_equal(img2, img)
     return file_contents
 
@@ -117,7 +131,7 @@ def stream_to_array(stream, width, height, color_type, bit_depth):
 
     elif color_type == 3:
         # indexed
-        raise RuntimeError('check_stream for color_type 3 not implemented.')
+        img = p.reshape(height, -1)
 
     elif color_type == 4:
         # grayscale with alpha
@@ -253,7 +267,8 @@ class TestWritePng(unittest.TestCase):
                                            bit_depth=bit_depth,
                                            color_type=color_type)
 
-                file_contents = check_idat(file_contents, color_type=color_type,
+                file_contents = check_idat(file_contents,
+                                           color_type=color_type,
                                            bit_depth=bit_depth, img=img)
 
                 check_iend(file_contents)
@@ -384,6 +399,83 @@ class TestWritePng(unittest.TestCase):
                                    img=img)
 
         check_iend(file_contents)
+
+    def test_write_png_bkgd(self):
+        # Test creation of RGB images (color type 2), with a background color.
+        w = 16
+        h = 8
+        np.random.seed(123)
+        for bit_depth in [8, 16]:
+            maxval = 2**bit_depth
+            bg = (maxval - 1, maxval - 2, maxval - 3)
+            dt = np.uint16 if bit_depth == 16 else np.uint8
+            img = np.random.randint(0, maxval, size=(h, w, 3)).astype(dt)
+
+            f = io.BytesIO()
+            numpngw.write_png(f, img, background=bg)
+
+            file_contents = f.getvalue()
+
+            file_contents = check_signature(file_contents)
+
+            file_contents = check_ihdr(file_contents, width=w, height=h,
+                                       bit_depth=bit_depth, color_type=2)
+
+            file_contents = check_bkgd(file_contents, color=bg, color_type=2)
+
+            file_contents = check_idat(file_contents, color_type=2,
+                                       bit_depth=bit_depth, img=img)
+
+            check_iend(file_contents)
+
+    def test_write_png_bkgd_palette(self):
+        # Test creation of RGB images with a background color
+        # when use_palette is True.
+        w = 6
+        h = 8
+        np.random.seed(123)
+        for bg_in_img in [True, False]:
+            bit_depth = 8
+            maxval = 2**bit_depth
+            bg = (maxval - 1, maxval - 3, maxval - 2)
+            dt = np.uint8
+
+            img = np.arange(1, w*h*3 + 1, dtype=np.uint8).reshape(h, w, 3)
+            if bg_in_img:
+                img[-1, -1] = bg
+
+            f = io.BytesIO()
+            numpngw.write_png(f, img, background=bg, use_palette=True)
+
+            file_contents = f.getvalue()
+
+            file_contents = check_signature(file_contents)
+
+            file_contents = check_ihdr(file_contents, width=w, height=h,
+                                       bit_depth=bit_depth, color_type=3)
+
+            # Check the PLTE chunk.
+            chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+            self.assertEqual(chunk_type, b"PLTE")
+            plte = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
+            expected_palette = np.arange(1, w*h*3+1, dtype=np.uint8).reshape(-1, 3)
+            if bg_in_img:
+                expected_palette[-1] = bg
+            else:
+                expected_palette = np.append(expected_palette,
+                                             np.array([bg], dtype=np.uint8),
+                                             axis=0)
+            assert_array_equal(plte, expected_palette,
+                               "unexpected palette %r %r" %
+                               (plte[-2], expected_palette[-2]))
+
+            file_contents = check_bkgd(file_contents, color=bg, color_type=3)
+
+            file_contents = check_idat(file_contents, color_type=3,
+                                       bit_depth=bit_depth, img=img,
+                                       palette=plte)
+
+            check_iend(file_contents)
 
 
 class TestWriteApng(unittest.TestCase):

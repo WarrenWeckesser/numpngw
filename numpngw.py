@@ -126,6 +126,27 @@ def _write_trns(f, trans):
     _write_chunk(f, b"tRNS", trans_be.tostring())
 
 
+def _write_bkgd(f, color, color_type):
+    """
+    Write bKGD chunk to `f`.
+
+    * If `color_type` is 0 or 4, `color` must be an integer.
+    * If `color_type` is 2 or 6, `color` must be a sequence of three
+      integers (RGB values).
+    * If `color_type` is 3, `color` must be an integer that is less than
+      the number of colors in the palette.
+    """
+    if color_type == 0 or color_type == 4:
+        chunk_data = _struct.pack("!H", color)
+    elif color_type == 2 or color_type == 6:
+        chunk_data = _struct.pack("!HHH", *color)
+    elif color_type == 3:
+        chunk_data = _struct.pack("B", color)
+    else:
+        raise ValueError("invalid chunk_type %r" % (color_type,))
+    _write_chunk(f, b"bKGD", chunk_data)
+
+
 def _write_idat(f, data):
     """Write an IDAT chunk to `f`."""
     _write_chunk(f, b"IDAT", data)
@@ -355,9 +376,37 @@ def _validate_timestamp(timestamp):
     return timestamp
 
 
+def _add_background_color(background, palette, trans):
+    if len(background) != 3:
+        raise ValueError("background must have length 3 when "
+                         "use_palette is True.")
+    index = _np.where((palette == background).all(axis=-1))[0]
+    if index.size > 0:
+        # The given background color is in the palette.
+        background = index
+    else:
+        # The given background color is *not* in the palette.  Is there
+        # room for one more color?
+        if len(palette) == 256:
+            msg = ("The array has 256 colors, and a background color "
+                   "that is not in the array has been given.  No more "
+                   "than 256 colors are allowed when using a palette.")
+            raise ValueError(msg)
+        else:
+            index = len(palette)
+            palette = _np.append(palette,
+                                 _np.array([background],
+                                           dtype=_np.uint8),
+                                 axis=0)
+            if trans is not None:
+                trans = _np.append(trans, [_np.uint8(255)])
+            background = index
+    return background, palette, trans
+
+
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
-              timestamp=None, gamma=None):
+              timestamp=None, gamma=None, background=None):
     """
     Write a numpy array to a PNG file.
 
@@ -384,7 +433,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         of `a` is (m, n), (m, n, 1) or (m, n, 3)), the `transparent` argument
         can be used to specify a single color that is to be considered the
         transparent color.  This argument is ignored if `a` includes an
-        alpha channel.
+        alpha channel, or if `use_palette` is True and the `transparent`
+        color is not in `a`.  Otherwise, a 'tRNS' chunk is included in the
+        PNG file.
     bitdepth : integer, optional
         Bit depth of the output image.  Valid values are 1, 2, 4 and 8.
         Only valid for grayscale images with no alpha channel with an input
@@ -403,6 +454,12 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         If this argument is not None, a 'gAMA' chunk is included in the
         PNG file.  The argument is expected to be a floating point value.
         The value written in the 'gAMA' chunk is int(gamma*100000 + 0.5).
+    background : int (for grayscale) or sequence of three ints (for RGB)
+        Set the default background color.  When this option is used, a
+        'bKGD' chunk is included in the PNG file.  When `use_palette`
+        is True, and `background` is not one of the colors in `a`, the
+        `background` color is included in the palette, and so it counts
+        towards the maximum number of 256 colors allowed in a palette.
 
     Notes
     -----
@@ -450,6 +507,15 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
             raise ValueError("The array has %d colors.  No more than 256 "
                              "colors are allowed when using a palette." %
                              len(palette))
+
+        if background is not None:
+            # A default background color has been given, and we're creating
+            # an indexed palette (use_palette is True).  Convert the given
+            # background color to an index.  If the color is not in the
+            # palette, extend the palette with the new color (or raise an
+            # error if there are already 256 colors).
+            background, palette, trans = _add_background_color(background,
+                                                               palette, trans)
 
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given
@@ -517,6 +583,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if trans is not None:
         _write_trns(f, trans)
 
+    # bKGD chunk, if there is one.
+    if background is not None:
+        _write_bkgd(f, background, color_type)
+
     # _write_data(...) writes the IDAT chunk(s).
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len)
 
@@ -559,7 +629,8 @@ def _msec_to_numden(delay):
 def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
-               max_chunk_len=None, timestamp=None, gamma=None):
+               max_chunk_len=None, timestamp=None, gamma=None,
+               background=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -618,6 +689,13 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         If this argument is not None, a 'gAMA' chunk is included in the
         PNG file.  The argument is expected to be a floating point value.
         The value written in the 'gAMA' chunk is int(gamma*100000 + 0.5).
+    background : int (for grayscale) or sequence of three ints (for RGB)
+        Set the default background color.  When this option is used, a
+        'bKGD' chunk is included in the PNG file.  When `use_palette`
+        is True, and `background` is not one of the colors in `a`, the
+        `background` color is included in the palette, and so it counts
+        towards the maximum number of 256 colors allowed in a palette.
+
     """
     num_frames = len(seq)
     if num_frames == 0:
@@ -681,6 +759,15 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                              "colors are allowed when using a palette." %
                              len(palette))
 
+        if background is not None:
+            # A default background color has been given, and we're creating
+            # an indexed palette (use_palette is True).  Convert the given
+            # background color to an index.  If the color is not in the
+            # palette, extend the palette with the new color (or raise an
+            # error if there are already 256 colors).
+            background, palette, trans = _add_background_color(background,
+                                                               palette, trans)
+
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given
             # a color value that should be considered to be transparent.
@@ -741,6 +828,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     # tRNS chunk, if there is one.
     if trans is not None:
         _write_trns(f, trans)
+
+    # bKGD chunk, if there is one.
+    if background is not None:
+        _write_bkgd(f, background, color_type)
 
     # acTL chunk
     _write_actl(f, num_frames, num_plays)
