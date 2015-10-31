@@ -610,13 +610,13 @@ def _msec_to_numden(delay):
     if delay == 0:
         return (0, 1)
     # Convert delay to seconds.
-    delay = delay/1000.0
-    if delay > 1:
-        f = _Fraction.from_float(1.0/delay).limit_denominator(65535)
+    delay_sec = delay/1000.0
+    if delay_sec > 1:
+        f = _Fraction.from_float(1.0/delay_sec).limit_denominator(65535)
         num = f.denominator
         den = f.numerator
     else:
-        f = _Fraction.from_float(delay).limit_denominator(65535)
+        f = _Fraction.from_float(delay_sec).limit_denominator(65535)
         num = f.numerator
         den = f.denominator
     if (num, den) == (1, 0):
