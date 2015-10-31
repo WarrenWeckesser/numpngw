@@ -51,9 +51,11 @@ from __future__ import (division as _division,
 
 import struct as _struct
 import zlib as _zlib
-from fractions import Fraction
+from fractions import Fraction as _Fraction
 import numpy as _np
 
+
+__all__ = ['write_png', 'write_apng']
 
 __version__ = "0.0.2-dev0"
 
@@ -610,11 +612,11 @@ def _msec_to_numden(delay):
     # Convert delay to seconds.
     delay = delay/1000.0
     if delay > 1:
-        f = Fraction.from_float(1.0/delay).limit_denominator(65535)
+        f = _Fraction.from_float(1.0/delay).limit_denominator(65535)
         num = f.denominator
         den = f.numerator
     else:
-        f = Fraction.from_float(delay).limit_denominator(65535)
+        f = _Fraction.from_float(delay).limit_denominator(65535)
         num = f.numerator
         den = f.denominator
     if (num, den) == (1, 0):
