@@ -644,10 +644,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     ----------
     seq : sequence of numpy arrays
         All the arrays must have the same shape and dtype.
-    delay : scalar, optional
-        The time delay between frames, in milliseconds.
+    delay : scalar or sequence of scalars, optional
+        The time display the frames, in milliseconds.
         If `delay` is None (the default) or 0, the frames are played as
-        fast as possible.
+        fast as possible.  If `delay` is a sequence, it must have the same
+        length as `seq.
     num_plays : int
         The number of times to repeat the animation.  If 0, the animation
         is repeated indefinitely.
@@ -704,7 +705,14 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         raise ValueError("no frames given in `seq`")
 
     if delay is None:
-        delay = 0
+        delay = [0] * num_frames
+    else:
+        try:
+            ndelay = len(delay)
+        except TypeError:
+            delay = [delay] * num_frames
+        if len(delay) != num_frames:
+            raise ValueError('len(delay) must be the same as len(seq)')
 
     # Validate seq
     if type(seq) == _np.ndarray:
@@ -838,20 +846,23 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     # acTL chunk
     _write_actl(f, num_frames, num_plays)
 
-    # Convert delay (which is milliseconds) to the number of
+    # Convert delays (which are in  milliseconds) to the number of
     # seconds expressed as the fraction delay_num/delay_den.
-    delay_num, delay_den = _msec_to_numden(delay)
+    delay_num, delay_den = zip(*[_msec_to_numden(d) for d in delay])
 
     sequence_number = 0
+    frame_number = 0
 
     if default_image is None:
         # fcTL chunk for the first frame
         _write_fctl(f, sequence_number=sequence_number,
                     width=seq[0].shape[1], height=seq[0].shape[0],
                     x_offset=0, y_offset=0,
-                    delay_num=delay_num, delay_den=delay_den,
+                    delay_num=delay_num[frame_number],
+                    delay_den=delay_den[frame_number],
                     dispose_op=0, blend_op=1)
         sequence_number += 1
+        frame_number += 1
         # IDAT chunk(s) for the first frame (no sequence_number)
         _write_data(f, seq[0], bitdepth, max_chunk_len=max_chunk_len)
         seq = seq[1:]
@@ -864,9 +875,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         _write_fctl(f, sequence_number=sequence_number,
                     width=frame.shape[1], height=frame.shape[0],
                     x_offset=0, y_offset=0,
-                    delay_num=delay_num, delay_den=delay_den,
+                    delay_num=delay_num[frame_number],
+                    delay_den=delay_den[frame_number],
                     dispose_op=0, blend_op=1)
         sequence_number += 1
+        frame_number += 1
 
         # fdAT chunk(s) for the next frame
         num_chunks = _write_data(f, frame, bitdepth,
