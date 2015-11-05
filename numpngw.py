@@ -49,13 +49,15 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import (division as _division,
                         print_function as _print_function)
 
+import contextlib as _contextlib
+from io import BytesIO as _BytesIO
 import struct as _struct
 import zlib as _zlib
 from fractions import Fraction as _Fraction
 import numpy as _np
 
 
-__all__ = ['write_png', 'write_apng']
+__all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
 __version__ = "0.0.2-dev0"
 
@@ -931,3 +933,63 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
 
     if f != fileobj:
         f.close()
+
+
+class AnimatedPNGWriter(object):
+    """
+    This class implements the interface required by a matplotlib
+    `MovieWriter`.  An instance of this class may be used as the
+    `writer` argument of `Animation.save()`.
+
+    This class is experimental.  It will likely change without
+    warning in the next release.
+    """
+
+    # I haven't tried to determine all the additional arguments that
+    # should be given in __init__, and I haven't checked what should
+    # be pulled from rcParams if a corresponding argument is not given.
+    def __init__(self, fps):
+        self.fps = fps
+        # Convert frames-per-second to delay between frames in milliseconds.
+        self._delay = 1000/fps
+
+    def setup(self, fig, outfile, dpi, *args):
+        self.fig = fig
+        self.outfile = outfile
+        self.dpi = dpi
+        self._frames = []
+
+    def grab_frame(self, **savefig_kwargs):
+        img_io = _BytesIO()
+        self.fig.savefig(img_io, format='rgba', dpi=self.dpi, **savefig_kwargs)
+        raw = img_io.getvalue()
+        # A bit of experimentation suggested that taking the integer part of
+        # the following products is the correct conversion, but I haven't
+        # verified it in the matplotlib code.  If this is not the correct
+        # conversion, the call to np.fromstring() or the subsequent call of
+        # the reshape method will likely raise an exception
+        height = int(self.fig.get_figheight() * self.dpi)
+        width = int(self.fig.get_figwidth() * self.dpi)
+        a = _np.fromstring(raw, dtype=_np.uint8).reshape(height, width, 4)
+        self._frames.append(a)
+
+    def finish(self):
+        for frame in self._frames:
+            if not _np.all(frame[:, :, 3] == 255):
+                break
+        else:
+            # All the alpha values are 255, so drop the alpha channel.
+            self._frames = [frame[:, :, :3] for frame in self._frames]
+
+        write_apng(self.outfile, self._frames, delay=self._delay)
+
+    @_contextlib.contextmanager
+    def saving(self, fig, outfile, dpi, *args):
+        """
+        Context manager to facilitate writing the movie file.
+
+        All arguments are passed to `setup()`.
+        """
+        self.setup(fig, outfile, dpi, *args)
+        yield
+        self.finish()

@@ -3,7 +3,9 @@ numpngw
 
 This python package defines the function `write_png` that writes a
 numpy array to a PNG file, and the function `write_apng` that writes
-a sequence of arrays to an animated PNG (APNG) file.
+a sequence of arrays to an animated PNG (APNG) file.  Also included
+is the class `AnimatedPNGWriter` that can be used to save a Matplotlib
+animation as an animated PNG file; see Example 8 for an example.
 
 Capabilities of `write_png` include:
 
@@ -347,3 +349,41 @@ Create an animated PNG with different display times for each frame.
     # Create the animated PNG file.
     write_apng("example7.png", seq, delay=delay, default_image=im_all,
                use_palette=True)
+
+
+Example 8
+---------
+
+This example shows how a Matplotlib animation can be saved as
+an animated PNG file with `numpngw.AnimatedPNGWriter`.  (Be careful
+with this class--it can easily create very large PNG files.)
+
+![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example8.png)
+
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib import animation
+    from numpngw import AnimatedPNGWriter
+
+
+    def update_line(num, data, line):
+        line.set_data(data[:, :num+1])
+        return line,
+
+    fig = plt.figure(figsize=(4.25, 4.1))
+
+    num_frames = 18
+
+    theta = np.linspace(0, 24*np.pi, num_frames)
+    data = np.vstack((np.cos(theta), np.sin(theta)))
+
+    lineplot, = plt.plot([], [], 'c-', linewidth=3)
+    plt.axis('equal')
+    plt.ylim(-1, 1)
+    plt.xlim(-1, 1)
+    plt.title('Matplotlib Animation')
+    ani = animation.FuncAnimation(fig, update_line, frames=num_frames,
+                                  fargs=(data, lineplot))
+    writer = AnimatedPNGWriter(fps=2)
+    ani.save('example8.png', dpi=50, writer=writer)
