@@ -421,7 +421,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         Must be an array of 8- or 16-bit unsigned integers.  The shape of `a`
         must be (m, n) or (m, n, d) with 1 <= d <= 4.
     text_list : list of (keyword, text) tuples, optional
-        Each tuple is written to the file as a 'tEXt' chunk.
+        Each tuple is written to the file as a 'tEXt' chunk.  See the Notes
+        for more information about text in PNG files.
     use_palette : bool, optional
         If True, *and* the data type of `a` is `numpy.uint8`, *and* the size
         of `a` is (m, n, 3), then a PLTE chunk is created and an indexed color
@@ -475,6 +476,39 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
             2          grayscale and alpha
             3          RGB
             4          RGB and alpha
+
+    The `text_list` argument accepts a list of tuples of two strings argument.
+    The first item in each tuple is the *keyword*, and the second is the text
+    string.  This argument allows `'tEXt'` chunks to be created.  The
+    following is from the PNG specification::
+
+        The keyword indicates the type of information represented by the
+        text string. The following keywords are predefined and should be
+        used where appropriate:
+
+            Title          Short (one line) title or caption for image
+            Author         Name of image's creator
+            Description    Description of image (possibly long)
+            Copyright      Copyright notice
+            Creation Time  Time of original image creation
+            Software       Software used to create the image
+            Disclaimer     Legal disclaimer
+            Warning        Warning of nature of content
+            Source         Device used to create the image
+            Comment        Miscellaneous comment; conversion from GIF comment
+
+        Both keyword and text are interpreted according to the ISO 8859-1
+        (Latin-1) character set [ISO-8859]. The text string can contain any
+        Latin-1 character. Newlines in the text string should be represented
+        by a single linefeed character (decimal 10); use of other control
+        characters in the text is discouraged.
+
+        Keywords must contain only printable Latin-1 characters and spaces;
+        that is, only character codes 32-126 and 161-255 decimal are allowed.
+        To reduce the chances for human misreading of a keyword, leading and
+        trailing spaces are forbidden, as are consecutive spaces. Note also
+        that the non-breaking space (code 160) is not permitted in keywords,
+        since it is visually indistinguishable from an ordinary space.
     """
 
     _validate_array(a)
@@ -699,6 +733,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         `background` color is included in the palette, and so it counts
         towards the maximum number of 256 colors allowed in a palette.
 
+    Notes
+    -----
+
+    See the `write_png` docstring for additional details about some
+    of the arguments.
     """
     num_frames = len(seq)
     if num_frames == 0:
