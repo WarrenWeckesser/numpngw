@@ -93,68 +93,89 @@ def check_idat(file_contents, color_type, bit_depth, img, palette=None):
 def stream_to_array(stream, width, height, color_type, bit_depth):
     # `stream` is 1-d numpy array with dytpe np.uint8 containing the
     # data from one or more IDAT or fdAT chunks.
-    # This function assumes that the PNG filter type is 0.
     #
-    # This function converts `stream` to an array.
-
-    # nchannels is a map from color_type to the number of color
-    # channels (e.g. an RGB image has three channels).
-    nchannels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
+    # This function converts `stream` to a numpy array.
 
     ncols, rembits = divmod(width*bit_depth, 8)
     ncols += rembits > 0
-    lines = stream.reshape(height, nchannels[color_type]*ncols + 1)
-    expected_col0 = np.zeros(height, dtype=np.uint8)
-    assert_array_equal(lines[:, 0], expected_col0)
-    p = lines[:, 1:]
+
+    if bit_depth < 8:
+        bytes_per_pixel = 1  # Not really, but we need 1 here for later.
+        data_bytes_per_line = ncols
+    else:
+        # nchannels is a map from color_type to the number of color
+        # channels (e.g. an RGB image has three channels).
+        nchannels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
+        bytes_per_channel = bit_depth // 8
+        bytes_per_pixel = bytes_per_channel * nchannels[color_type]
+        data_bytes_per_line = bytes_per_pixel * width
+
+    data_width = data_bytes_per_line / bytes_per_pixel
+
+    lines = stream.reshape(height, data_bytes_per_line + 1)
+
+    prev = np.zeros((data_width, bytes_per_pixel), dtype=np.uint8)
+    p = np.empty((height, data_width, bytes_per_pixel), dtype=np.uint8)
+    for k in range(lines.shape[0]):
+        line_filter_type = lines[k, 0]
+        filtered = lines[k, 1:].reshape(-1, bytes_per_pixel)
+        if line_filter_type == 0:
+            p[k] = filtered
+        elif line_filter_type == 1:
+            p[k] = numpngw._filter1inv(filtered, prev)
+        elif line_filter_type == 2:
+            p[k] = numpngw._filter2inv(filtered, prev)
+        elif line_filter_type == 3:
+            p[k] = numpngw._filter3inv(filtered, prev)
+        elif line_filter_type == 4:
+            p[k] = numpngw._filter4inv(filtered, prev)
+        else:
+            raise ValueError('invalid fitlter type: %i' % (line_filter_type,))
+        prev = p[k]
+
+    # As this point, p has data type uint8 and has shape
+    # (height, width, bytes_per_pixel).
+    # 16 bit components of the pixel are stored in big-endian format.
 
     uint8to16 = np.array([256, 1], dtype=np.uint16)
 
     if color_type == 0:
         # grayscale
         if bit_depth == 16:
-            img = p.reshape(-1, p.shape[1]//2, 2).dot(uint8to16)
+            img = p.dot(uint8to16)
         elif bit_depth == 8:
-            img = p
+            img = p[:, :, 0]
         else:  # bit_depth is 1, 2 or 4.
-            img = numpngw._unpack(p, bitdepth=bit_depth, width=width)
+            img = numpngw._unpack(p.reshape(height, -1),
+                                  bitdepth=bit_depth, width=width)
 
     elif color_type == 2:
         # RGB
         if bit_depth == 16:
             # Combine high and low bytes to 16-bit values.
-            img1 = p.reshape(-1, p.shape[1]//2, 2).dot(uint8to16)
-            # Reshape to (height, width, 3)
-            img = img1.reshape(height, -1, 3)
+            img = p.reshape(height, width, 3, 2).dot(uint8to16)
         else:  # bit_depth is 8.
-            # Reshape to (height, width, 3)
-            img = p.reshape(height, -1, 3)
+            img = p
 
     elif color_type == 3:
         # indexed
-        img = p.reshape(height, -1)
+        img = p[:, :, 0]
 
     elif color_type == 4:
         # grayscale with alpha
         if bit_depth == 16:
             # Combine high and low bytes to 16-bit values.
-            img1 = p.reshape(-1, p.shape[1]//2, 2).dot(uint8to16)
-            # Reshape to (height, width, 2)
-            img = img1.reshape(height, -1, 2)
+            img = p.reshape(height, width, 2, 2).dot(uint8to16)
         else:  # bit_depth is 8.
-            # Reshape to (height, width, 2)
-            img = p.reshape(height, -1, 2)
+            img = p
 
     elif color_type == 6:
         # RGBA
         if bit_depth == 16:
             # Combine high and low bytes to 16-bit values.
-            img1 = p.reshape(-1, p.shape[1]//2, 2).dot(uint8to16)
-            # Reshape to (height, width, 4)
-            img = img1.reshape(height, -1, 4)
+            img = p.reshape(height, width, 4, 2).dot(uint8to16)
         else:  # bit_depth is 8.
-            # Reshape to (height, width, 3)
-            img = p.reshape(height, -1, 4)
+            img = p
 
     else:
         raise RuntimeError('invalid color type %r' % (color_type,))
@@ -215,35 +236,38 @@ class TestWritePng(unittest.TestCase):
         # Test the creation of grayscale images for bit depths of 1, 2, 4
         # 8 and 16, with or without a `transparent` color selected.
         np.random.seed(123)
-        for bitdepth in [1, 2, 4, 8, 16]:
-            for transparent in [None, 0]:
-                dt = np.uint16 if bitdepth == 16 else np.uint8
-                maxval = 2**bitdepth
-                img = np.random.randint(0, maxval, size=(3, 11)).astype(dt)
-                if transparent is not None:
-                    img[2:4, 2:] = transparent
+        for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
+            for bitdepth in [1, 2, 4, 8, 16]:
+                for transparent in [None, 0]:
+                    dt = np.uint16 if bitdepth == 16 else np.uint8
+                    maxval = 2**bitdepth
+                    img = np.random.randint(0, maxval, size=(3, 11)).astype(dt)
+                    if transparent is not None:
+                        img[2:4, 2:] = transparent
 
-                f = io.BytesIO()
-                numpngw.write_png(f, img, bitdepth=bitdepth,
-                                  transparent=transparent)
+                    f = io.BytesIO()
+                    numpngw.write_png(f, img, bitdepth=bitdepth,
+                                      transparent=transparent,
+                                      filter_type=filter_type)
 
-                file_contents = f.getvalue()
+                    file_contents = f.getvalue()
 
-                file_contents = check_signature(file_contents)
+                    file_contents = check_signature(file_contents)
 
-                file_contents = check_ihdr(file_contents,
-                                           width=img.shape[1],
-                                           height=img.shape[0],
-                                           bit_depth=bitdepth, color_type=0)
+                    file_contents = check_ihdr(file_contents,
+                                               width=img.shape[1],
+                                               height=img.shape[0],
+                                               bit_depth=bitdepth,
+                                               color_type=0)
 
-                if transparent is not None:
-                    file_contents = check_trns(file_contents, color_type=0,
-                                               transparent=transparent)
+                    if transparent is not None:
+                        file_contents = check_trns(file_contents, color_type=0,
+                                                   transparent=transparent)
 
-                file_contents = check_idat(file_contents, color_type=0,
-                                           bit_depth=bitdepth, img=img)
+                    file_contents = check_idat(file_contents, color_type=0,
+                                               bit_depth=bitdepth, img=img)
 
-                check_iend(file_contents)
+                    check_iend(file_contents)
 
     def test_write_png_with_alpha(self):
         # Test creation of grayscale+alpha and RGBA images (color types 4
@@ -251,28 +275,30 @@ class TestWritePng(unittest.TestCase):
         w = 25
         h = 15
         np.random.seed(12345)
-        for color_type in [4, 6]:
-            num_channels = 2 if color_type == 4 else 4
-            for bit_depth in [8, 16]:
-                dt = np.uint8 if bit_depth == 8 else np.uint16
-                img = np.random.randint(0, 2**bit_depth,
-                                        size=(h, w, num_channels)).astype(dt)
-                f = io.BytesIO()
-                numpngw.write_png(f, img)
+        for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
+            for color_type in [4, 6]:
+                num_channels = 2 if color_type == 4 else 4
+                for bit_depth in [8, 16]:
+                    dt = np.uint8 if bit_depth == 8 else np.uint16
+                    img = np.random.randint(0, 2**bit_depth,
+                                            size=(h, w, num_channels)).astype(dt)
+                    f = io.BytesIO()
+                    numpngw.write_png(f, img, filter_type=filter_type)
 
-                file_contents = f.getvalue()
+                    file_contents = f.getvalue()
 
-                file_contents = check_signature(file_contents)
+                    file_contents = check_signature(file_contents)
 
-                file_contents = check_ihdr(file_contents, width=w, height=h,
-                                           bit_depth=bit_depth,
-                                           color_type=color_type)
+                    file_contents = check_ihdr(file_contents,
+                                               width=w, height=h,
+                                               bit_depth=bit_depth,
+                                               color_type=color_type)
 
-                file_contents = check_idat(file_contents,
-                                           color_type=color_type,
-                                           bit_depth=bit_depth, img=img)
+                    file_contents = check_idat(file_contents,
+                                               color_type=color_type,
+                                               bit_depth=bit_depth, img=img)
 
-                check_iend(file_contents)
+                    check_iend(file_contents)
 
     def test_write_png_RGB(self):
         # Test creation of RGB images (color type 2), with and without
@@ -280,32 +306,37 @@ class TestWritePng(unittest.TestCase):
         w = 24
         h = 10
         np.random.seed(12345)
-        for transparent in [None, (0, 0, 0)]:
-            for bit_depth in [8, 16]:
-                dt = np.uint16 if bit_depth == 16 else np.uint8
-                maxval = 2**bit_depth
-                img = np.random.randint(0, maxval, size=(h, w, 3)).astype(dt)
-                if transparent:
-                    img[2:4, 2:4] = transparent
+        for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
+            for transparent in [None, (0, 0, 0)]:
+                for bit_depth in [8, 16]:
+                    dt = np.uint16 if bit_depth == 16 else np.uint8
+                    maxval = 2**bit_depth
+                    img = np.random.randint(0, maxval,
+                                            size=(h, w, 3)).astype(dt)
+                    if transparent:
+                        img[2:4, 2:4] = transparent
 
-                f = io.BytesIO()
-                numpngw.write_png(f, img, transparent=transparent)
+                    f = io.BytesIO()
+                    numpngw.write_png(f, img, transparent=transparent,
+                                      filter_type=filter_type)
 
-                file_contents = f.getvalue()
+                    file_contents = f.getvalue()
 
-                file_contents = check_signature(file_contents)
+                    file_contents = check_signature(file_contents)
 
-                file_contents = check_ihdr(file_contents, width=w, height=h,
-                                           bit_depth=bit_depth, color_type=2)
+                    file_contents = check_ihdr(file_contents,
+                                               width=w, height=h,
+                                               bit_depth=bit_depth,
+                                               color_type=2)
 
-                if transparent:
-                    file_contents = check_trns(file_contents, color_type=2,
-                                               transparent=transparent)
+                    if transparent:
+                        file_contents = check_trns(file_contents, color_type=2,
+                                                   transparent=transparent)
 
-                file_contents = check_idat(file_contents, color_type=2,
-                                           bit_depth=bit_depth, img=img)
+                    file_contents = check_idat(file_contents, color_type=2,
+                                               bit_depth=bit_depth, img=img)
 
-                check_iend(file_contents)
+                    check_iend(file_contents)
 
     def test_write_png_8bit_RGB_palette(self):
         img = np.arange(4*5*3, dtype=np.uint8).reshape(4, 5, 3)
@@ -330,9 +361,11 @@ class TestWritePng(unittest.TestCase):
         chunk_type, chunk_data, file_contents = next_chunk(file_contents)
         self.assertEqual(chunk_type, b"IDAT")
         decompressed = zlib.decompress(chunk_data)
-        b = np.fromstring(decompressed, dtype=np.uint8)
-        lines = b.reshape(img.shape[0], img.shape[1]+1)
-        img2 = lines[:, 1:].reshape(img.shape[:2])
+        stream = np.fromstring(decompressed, dtype=np.uint8)
+        height, width = img.shape[:2]
+        img2 = stream_to_array(stream, width, height, color_type=3,
+                               bit_depth=8)
+
         expected = np.arange(20, dtype=np.uint8).reshape(img.shape[:2])
         assert_array_equal(img2, expected)
 
@@ -413,7 +446,7 @@ class TestWritePng(unittest.TestCase):
             img = np.random.randint(0, maxval, size=(h, w, 3)).astype(dt)
 
             f = io.BytesIO()
-            numpngw.write_png(f, img, background=bg)
+            numpngw.write_png(f, img, background=bg, filter_type=0)
 
             file_contents = f.getvalue()
 
@@ -477,6 +510,33 @@ class TestWritePng(unittest.TestCase):
                                        palette=plte)
 
             check_iend(file_contents)
+
+
+class TestWritePngFilterType(unittest.TestCase):
+
+    def test_basic(self):
+        w = 22
+        h = 10
+        bitdepth = 8
+        np.random.seed(123)
+        img = np.random.randint(0, 256, size=(h, w)).astype(np.uint8)
+
+        f = io.BytesIO()
+        numpngw.write_png(f, img, filter_type=1)
+
+        file_contents = f.getvalue()
+
+        file_contents = check_signature(file_contents)
+
+        file_contents = check_ihdr(file_contents,
+                                   width=img.shape[1],
+                                   height=img.shape[0],
+                                   bit_depth=bitdepth, color_type=0)
+
+        file_contents = check_idat(file_contents, color_type=0,
+                                   bit_depth=bitdepth, img=img)
+
+        check_iend(file_contents)
 
 
 class TestWriteApng(unittest.TestCase):

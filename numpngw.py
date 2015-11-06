@@ -62,20 +62,130 @@ __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 __version__ = "0.0.2-dev0"
 
 
-def _create_stream(a):
+def _filter0(row, prev_row):
+    return row
+
+
+def _filter0inv(frow, prev_row):
+    return frow
+
+
+def _filter1(row, prev_row):
+    d = _np.zeros_like(row)
+    d[1:] = _np.diff(row, axis=0)
+    d[0] = row[0]
+    return d
+
+
+def _filter1inv(frow, prev_row):
+    return frow.cumsum(axis=0, dtype=_np.uint64).astype(_np.uint8)
+
+
+def _filter2(row, prev_row):
+    d = row - prev_row
+    return d
+
+
+def _filter2inv(frow, prev_row):
+    return frow + prev_row
+
+
+def _filter3(row, prev_row):
+    a = _np.zeros_like(row, dtype=_np.int64)
+    a[1:] = row[:-1]
+    c = ((a + prev_row) // 2).astype(row.dtype)
+    d = row - c
+    return d
+
+
+def _filter3inv(frow, prev_row):
+    # Slow python loop, but currently this is only used for testing.
+    row = _np.empty_like(frow)
+    for k in range(len(frow)):
+        if k == 0:
+            row[k] = frow[k] + (prev_row[k] // 2)
+        else:
+            row[k] = frow[k] + (row[k-1].astype(int) +
+                                prev_row[k].astype(int)) // 2
+    return row
+
+
+def _filter4(row, prev_row):
+    """Paeth filter."""
+    # Create a, b and c.
+    a = _np.zeros_like(row, dtype=_np.int64)
+    a[1:] = row[:-1]
+    b = prev_row.astype(_np.int64)
+    c = _np.zeros_like(b)
+    c[1:] = b[:-1]
+
+    p = a + b - c
+    pa = _np.abs(p - a)
+    pb = _np.abs(p - b)
+    pc = _np.abs(p - c)
+    y = _np.where((pa <= pb) & (pa <= pc), a, _np.where(pb <= pc, b, c))
+    pr = y.astype(_np.uint8)
+    d = row - pr
+    return d
+
+
+def _filter4inv(frow, prev_row):
+    # Slow python loop, but currently this is only used for testing.
+    row = _np.empty_like(frow)
+    for k in range(len(frow)):
+        if k == 0:
+            ra = _np.zeros_like(frow[k])
+            rc = _np.zeros_like(frow[k])
+        else:
+            ra = row[k-1].astype(int)
+            rc = prev_row[k-1].astype(int)
+        rb = prev_row[k].astype(int)
+        p = ra + rb - rc
+        pa = _np.abs(p - ra)
+        pb = _np.abs(p - rb)
+        pc = _np.abs(p - rc)
+        y = _np.where((pa <= pb) & (pa <= pc), ra, _np.where(pb <= pc, rb, rc))
+        row[k] = frow[k] + y
+    return row
+
+
+def _create_stream(a, filter_type=None):
     """
     Convert the data in `a` into a python string.
 
+    `a` is must to be a 2D or 3D array of unsigned 8- or 16-bit
+    integers.
+
     The string is formatted as the "scan lines" of the array.
     """
-    # `a` is expected to be a 2D or 3D array of unsigned integers.
+    filters = [_filter0, _filter1, _filter2, _filter3, _filter4]
+
+    if filter_type is None:
+        filter_type = "heuristic"
+    allowed_filter_types = [0, 1, 2, 3, 4, "heuristic"]
+    if filter_type not in allowed_filter_types:
+        raise ValueError('filter_type must be one of %r' %
+                         (allowed_filter_types,))
+
+    if a.ndim == 2:
+        # Gray scale.  Add a trivial third dimension.
+        a = a[:, :, _np.newaxis]
     lines = []
+    prev_row = _np.zeros_like(a[0]).view(_np.uint8)
     for row in a:
         # Convert the row to big-endian (i.e. network byte order).
-        row_be = row.astype('>' + row.dtype.str[1:])
-        # Create the string, with '\0' prepended.  The extra 0 is the
-        # filter type byte; 0 means no filtering of this scan line.
-        lines.append(b'\0' + row_be.tostring())
+        row_be = row.astype('>' + row.dtype.str[1:]).view(_np.uint8)
+        if filter_type == "heuristic":
+            filtered_rows = [filt(row_be, prev_row) for filt in filters]
+            values = _np.array([_np.abs(fr.view(_np.int8).astype(_np.int)).sum()
+                                for fr in filtered_rows])
+            ftype = values.argmin()
+            # Create the string, with the filter type prepended.
+            lines.append(chr(ftype) + filtered_rows[ftype].tostring())
+        else:
+            filtered_row = filters[filter_type](row_be, prev_row)
+            lines.append(chr(filter_type) + filtered_row.tostring())
+        prev_row = row_be
     stream = b''.join(lines)
     return stream
 
@@ -195,7 +305,8 @@ def _write_fdat(f, sequence_number, data):
     _write_chunk(f, b"fdAT", seq + data)
 
 
-def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None):
+def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
+                filter_type=None):
     """
     Write the image data in the array `a` to the file, using IDAT chunks
     if sequence_number is None and fdAT chunks otherwise.
@@ -206,13 +317,26 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None):
     If `sequence_number` is not None, `fdAT` chunks are written.
 
     Returns the number of chunks written to the file.
+
+    `filter_type` is passed on to _create_stream().
     """
     if bitdepth is not None and bitdepth < 8:
         data = _pack(a, bitdepth)
     else:
         data = a
-    stream = _create_stream(data)
-    zstream = _zlib.compress(stream)
+
+    if filter_type != "auto":
+        stream = _create_stream(data, filter_type=filter_type)
+        zstream = _zlib.compress(stream)
+    else:
+        # filter_type is "auto", so try them all and pick the one
+        # that gives the best compression (i.e. smallest zstream).
+        zstream = None
+        for filter_type in [0, 1, 2, 3, 4, "heuristic"]:
+            s = _create_stream(data, filter_type=filter_type)
+            z = _zlib.compress(s)
+            if zstream is None or len(z) < len(zstream):
+                zstream = z
 
     # zstream is a string containing the packed, compressed version of the
     # data from the array `a`.  This will be written to the file in one or
@@ -451,7 +575,8 @@ def _add_background_color(background, palette, trans):
 
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
-              timestamp=None, gamma=None, background=None):
+              timestamp=None, gamma=None, background=None,
+              filter_type=None):
     """
     Write a numpy array to a PNG file.
 
@@ -506,6 +631,11 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         is True, and `background` is not one of the colors in `a`, the
         `background` color is included in the palette, and so it counts
         towards the maximum number of 256 colors allowed in a palette.
+    filter_type : one of 0, 1, 2, 3, 4, "heuristic" or "auto", optional
+        Controls the filter type that is used per scanline in the IDAT
+        chunks.  The default is "auto", which means the output data is
+        generated six time, once for each of the other possible filter
+        types, and the filter that generates the smallest output is used.
 
     Notes
     -----
@@ -553,6 +683,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         that the non-breaking space (code 160) is not permitted in keywords,
         since it is visually indistinguishable from an ordinary space.
     """
+
+    if filter_type is None:
+        filter_type = "auto"
 
     _validate_array(a)
 
@@ -667,7 +800,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         _write_bkgd(f, background, color_type)
 
     # _write_data(...) writes the IDAT chunk(s).
-    _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len)
+    _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
+                filter_type=filter_type)
 
     # IEND chunk
     _write_iend(f)
@@ -710,7 +844,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
-               background=None):
+               background=None, filter_type=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -781,6 +915,12 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         is True, and `background` is not one of the colors in `a`, the
         `background` color is included in the palette, and so it counts
         towards the maximum number of 256 colors allowed in a palette.
+    filter_type : one of 0, 1, 2, 3, 4, "heuristic" or "auto", optional
+        Controls the filter type that is used per scanline in the IDAT
+        chunks.  The default is "auto", which means the output data for
+        each frame is generated six time, once for each of the other
+        possible filter types, and the filter that generates the smallest
+        output is used.
 
     Notes
     -----
@@ -788,6 +928,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     See the `write_png` docstring for additional details about some
     of the arguments.
     """
+
+    if filter_type is None:
+        filter_type = "auto"
+
     num_frames = len(seq)
     if num_frames == 0:
         raise ValueError("no frames given in `seq`")
@@ -831,9 +975,9 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
             raise ValueError('default_image must have the same data type as '
                              'the arrays in seq')
         if default_image.shape[0] > height or default_image.shape[1] > width:
-            raise ValueError("The default image has shape (%i, %i), which exceeds "
-                             "the overall image size implied by `seq` and "
-                             "`offset`, which is (%i,  %i)" %
+            raise ValueError("The default image has shape (%i, %i), which "
+                             "exceeds the overall image size implied by `seq` "
+                             "and `offset`, which is (%i,  %i)" %
                              (default_image.shape[:2] + (height, width)))
 
     _validate_text(text_list)
@@ -957,11 +1101,13 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         sequence_number += 1
         frame_number += 1
         # IDAT chunk(s) for the first frame (no sequence_number)
-        _write_data(f, seq[0], bitdepth, max_chunk_len=max_chunk_len)
+        _write_data(f, seq[0], bitdepth, max_chunk_len=max_chunk_len,
+                    filter_type=filter_type)
         seq = seq[1:]
     else:
         # IDAT chunk(s) for the default image
-        _write_data(f, default_image, bitdepth, max_chunk_len=max_chunk_len)
+        _write_data(f, default_image, bitdepth, max_chunk_len=max_chunk_len,
+                    filter_type=filter_type)
 
     for frame in seq:
         # fcTL chunk for the next frame
@@ -978,7 +1124,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         # fdAT chunk(s) for the next frame
         num_chunks = _write_data(f, frame, bitdepth,
                                  max_chunk_len=max_chunk_len,
-                                 sequence_number=sequence_number)
+                                 sequence_number=sequence_number,
+                                 filter_type=filter_type)
         sequence_number += num_chunks
 
     # IEND chunk
@@ -1024,10 +1171,11 @@ class AnimatedPNGWriter(object):
     # I haven't tried to determine all the additional arguments that
     # should be given in __init__, and I haven't checked what should
     # be pulled from rcParams if a corresponding argument is not given.
-    def __init__(self, fps):
+    def __init__(self, fps, filter_type=None):
         self.fps = fps
         # Convert frames-per-second to delay between frames in milliseconds.
         self._delay = 1000/fps
+        self._filter_type = filter_type
 
     def setup(self, fig, outfile, dpi, *args):
         self.fig = fig
@@ -1077,7 +1225,8 @@ class AnimatedPNGWriter(object):
                             for img, offset, delay in self._frames]
 
         imgs, offsets, delays = zip(*self._frames)
-        write_apng(self.outfile, imgs, offset=offsets, delay=delays)
+        write_apng(self.outfile, imgs, offset=offsets, delay=delays,
+                   filter_type=self._filter_type)
 
     @_contextlib.contextmanager
     def saving(self, fig, outfile, dpi, *args):
