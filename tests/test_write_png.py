@@ -67,11 +67,12 @@ def check_bkgd(file_contents, color, color_type):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"bKGD")
     if color_type == 0 or color_type == 4:
-        color = struct.unpack("!H", chunk_data)
+        clr = struct.unpack("!H", chunk_data)
     elif color_type == 2 or color_type == 6:
-        color = struct.unpack("!HHH", chunk_data)
+        clr = struct.unpack("!HHH", chunk_data)
     else:
-        color = struct.unpack("B", chunk_data)
+        clr = struct.unpack("B", chunk_data)
+    # XXX Test the value of clr.
     return file_contents
 
 
@@ -171,7 +172,7 @@ def check_actl(file_contents, num_frames, num_plays):
 
 def check_fctl(file_contents, sequence_number, width, height,
                x_offset=0, y_offset=0, delay_num=0, delay_den=1,
-               dispose_op=0, blend_op=1):
+               dispose_op=0, blend_op=0):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"fcTL")
     values = struct.unpack("!IIIIIHHBB", chunk_data)
@@ -438,7 +439,6 @@ class TestWritePng(unittest.TestCase):
             bit_depth = 8
             maxval = 2**bit_depth
             bg = (maxval - 1, maxval - 3, maxval - 2)
-            dt = np.uint8
 
             img = np.arange(1, w*h*3 + 1, dtype=np.uint8).reshape(h, w, 3)
             if bg_in_img:
@@ -458,7 +458,8 @@ class TestWritePng(unittest.TestCase):
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
             self.assertEqual(chunk_type, b"PLTE")
             plte = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
-            expected_palette = np.arange(1, w*h*3+1, dtype=np.uint8).reshape(-1, 3)
+            expected_palette = np.arange(1, w*h*3+1,
+                                         dtype=np.uint8).reshape(-1, 3)
             if bg_in_img:
                 expected_palette[-1] = bg
             else:

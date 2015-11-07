@@ -274,6 +274,47 @@ def _palettize(a):
     return index, palette, trans
 
 
+def _palettize_seq(seq):
+    """"
+    seq must be a sequence of 3-d numpy arrays with dtype np.uint8,
+    all with the same depth (i.e. the same length of the third dimension).
+    """
+    # Call np.unique for each array in seq.  Each array is viewed as a
+    # 2-d structured array of colors.
+    depth = seq[0].shape[-1]
+    dt = ','.join(['u1'] * depth)
+    result = [_np.unique(a.view(dt).reshape(a.shape[:-1]), return_inverse=True)
+              for a in seq]
+
+    # `sizes` is the number of unique colors found in each array.
+    sizes = [len(r[0]) for r in result]
+
+    # Combine all the colors found in each array to get the overall
+    # set of unique colors.
+    combined = _np.concatenate([r[0] for r in result])
+    colors, inv = _np.unique(combined, return_inverse=True)
+
+    offsets = _np.cumsum(_np.r_[0, sizes[:-1]])
+    invs = [r[1].reshape(a.shape[:2]) for r, a in zip(result, seq)]
+
+    # The sequence index_seq holds the converted arrays.  The values
+    # in these arrays are indices into `palette`.  Note that if
+    # len(palette) > 256, the conversion to np.uint8 will cause
+    # some values in the arrays in `index_seq` to wrap around.
+    # The caller must check the len(palette) to determine if this
+    # has happened.
+    index_seq = [inv[o:o+s][i].astype(_np.uint8)
+                 for i, o, s in zip(invs, offsets, sizes)]
+    palette = colors.view(_np.uint8).reshape(-1, depth)[:, :3]
+    if depth == 3:
+        trans = None
+    else:
+        # trans is the 1-d array of alpha values of the unique RGBA colors.
+        # trans is the same length as `palette`.
+        trans = colors['f3']
+    return index_seq, palette, trans
+
+
 def _pack(a, bitdepth):
     """
     Pack the values in `a` into bitfields of a smaller array.
@@ -665,6 +706,7 @@ def _msec_to_numden(delay):
 
 
 def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
+               offset=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
@@ -694,6 +736,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         animation, this image is not shown.  If this argument is not given,
         the image shown by renderers that do not support animation will be
         `seq[0]`.
+    offset : sequence of tuples each with length 2, optional
+        If given, this must be a sequence of the form
+            [(row_offset0, col_offset0), (row_offset1, col_offset1), ...]
+        The length of the sequence must be the same as `seq`.  It defines
+        the location of the image within the PNG output buffer.
     text_list : list of (keyword, text) tuples, optional
         Each tuple is written to the file as a 'tEXt' chunk.
     use_palette : bool, optional
@@ -761,13 +808,21 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         _validate_array(seq[0])
     else:
         # seq is not a numpy array, so it must be a sequence of numpy arrays,
-        # all with the same dtype and shape.
+        # all with the same dtype.
         for a in seq:
             _validate_array(a)
         if any(a.dtype != seq[0].dtype for a in seq[1:]):
             raise ValueError("all arrays in `seq` must have the same dtype.")
-        if any(a.shape != seq[0].shape for a in seq[1:]):
-            raise ValueError("all arrays in `seq` must have the same shape.")
+
+    if offset is not None:
+        if len(offset) != len(seq):
+            raise ValueError('length of offset sequence must equal len(seq)')
+    else:
+        offset = [(0, 0)] * num_frames
+
+    # Overall width and height.
+    width = max(a.shape[1] + offset[k][1] for k, a in enumerate(seq))
+    height = max(a.shape[0] + offset[k][0] for k, a in enumerate(seq))
 
     # Validate default_image
     if default_image is not None:
@@ -775,9 +830,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         if default_image.dtype != seq[0].dtype:
             raise ValueError('default_image must have the same data type as '
                              'the arrays in seq')
-        if default_image.shape != seq[0].shape:
-            raise ValueError('default_image must have the same shape as the '
-                             'arrays in seq')
+        if default_image.shape[0] > height or default_image.shape[1] > width:
+            raise ValueError("The default image has shape (%i, %i), which exceeds "
+                             "the overall image size implied by `seq` and "
+                             "`offset`, which is (%i,  %i)" %
+                             (default_image.shape[:2] + (height, width)))
 
     _validate_text(text_list)
 
@@ -787,20 +844,15 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
 
     trans = None
     if color_type == 3:
-        # The array is 8 bit RGB or RGBA, and a palette is to be created.
+        # The arrays are 8 bit RGB or RGBA, and a palette is to be created.
 
         if default_image is None:
-            # Ensure that seq is single numpy array that can be passed
-            # to _palettize().
-            seq = _np.array(seq)
-            seq, palette, trans = _palettize(seq)
+            seq, palette, trans = _palettize_seq(seq)
         else:
-            # Put default_image and seq into a single numpy array that can be
-            # passed to _palettize().
-            tmp = _np.insert(seq, 0, default_image, axis=0)
-            tmp, palette, trans = _palettize(tmp)
-            default_image = tmp[0]
-            seq = tmp[1:]
+            tmp = [default_image] + [a for a in seq]
+            index_tmp, palette, trans = _palettize_seq(tmp)
+            default_image = index_tmp[0]
+            seq = index_tmp[1:]
         # seq and default_image have the same shapes as before, but now the
         # the arrays hold indices into the array `palette`, which contains
         # the colors.  `trans` is either None (if there was no alpha channel),
@@ -859,7 +911,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         nbits = bitdepth
     else:
         nbits = seq[0].dtype.itemsize*8
-    _write_ihdr(f, seq[0].shape[1], seq[0].shape[0], nbits, color_type)
+    _write_ihdr(f, width, height, nbits, color_type)
 
     # tEXt chunks, if any.
     if text_list is not None:
@@ -901,7 +953,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                     x_offset=0, y_offset=0,
                     delay_num=delay_num[frame_number],
                     delay_den=delay_den[frame_number],
-                    dispose_op=0, blend_op=1)
+                    dispose_op=0, blend_op=0)
         sequence_number += 1
         frame_number += 1
         # IDAT chunk(s) for the first frame (no sequence_number)
@@ -915,10 +967,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         # fcTL chunk for the next frame
         _write_fctl(f, sequence_number=sequence_number,
                     width=frame.shape[1], height=frame.shape[0],
-                    x_offset=0, y_offset=0,
+                    x_offset=offset[frame_number][1],
+                    y_offset=offset[frame_number][0],
                     delay_num=delay_num[frame_number],
                     delay_den=delay_den[frame_number],
-                    dispose_op=0, blend_op=1)
+                    dispose_op=0, blend_op=0)
         sequence_number += 1
         frame_number += 1
 
@@ -933,6 +986,29 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
 
     if f != fileobj:
         f.close()
+
+
+def _finddiff(img1, img2):
+    """
+    Finds the bounds of the region where img1 and img2 differ.
+
+    img1 and img2 must be 2D or 3D numpy arrays with the same shape.
+    """
+    if img1.shape != img2.shape:
+        raise ValueError('img1 and img2 must have the same shape')
+
+    if img1.ndim == 2:
+        mask = img1 != img2
+    else:
+        mask = _np.any(img1 != img2, axis=-1)
+    if _np.any(mask):
+        rows, cols = _np.where(mask)
+        row_range = rows.min(), rows.max() + 1
+        col_range = cols.min(), cols.max() + 1
+    else:
+        row_range = None
+        col_range = None
+    return row_range, col_range
 
 
 class AnimatedPNGWriter(object):
@@ -958,30 +1034,50 @@ class AnimatedPNGWriter(object):
         self.outfile = outfile
         self.dpi = dpi
         self._frames = []
+        self._prev_frame = None
 
     def grab_frame(self, **savefig_kwargs):
         img_io = _BytesIO()
         self.fig.savefig(img_io, format='rgba', dpi=self.dpi, **savefig_kwargs)
         raw = img_io.getvalue()
+
         # A bit of experimentation suggested that taking the integer part of
         # the following products is the correct conversion, but I haven't
         # verified it in the matplotlib code.  If this is not the correct
-        # conversion, the call to np.fromstring() or the subsequent call of
-        # the reshape method will likely raise an exception
+        # conversion, the call of the reshape method after calling fromstring
+        # will likely raise an exception.
         height = int(self.fig.get_figheight() * self.dpi)
         width = int(self.fig.get_figwidth() * self.dpi)
         a = _np.fromstring(raw, dtype=_np.uint8).reshape(height, width, 4)
-        self._frames.append(a)
+
+        if self._prev_frame is None:
+            self._frames.append((a, (0, 0), self._delay))
+        else:
+            rows, cols = _finddiff(a, self._prev_frame)
+            if rows is None:
+                # No difference, so just increment the delay of the previous
+                # frame.
+                img, offset, delay = self._frames[-1]
+                self._frames[-1] = (img, offset, delay + self._delay)
+            else:
+                # b is the rectangular region that contains the part
+                # of the image that changed.
+                b = a[rows[0]:rows[1], cols[0]:cols[1]]
+                offset = (rows[0], cols[0])
+                self._frames.append((b, offset, self._delay))
+        self._prev_frame = a
 
     def finish(self):
-        for frame in self._frames:
-            if not _np.all(frame[:, :, 3] == 255):
+        for img, offset, delay in self._frames:
+            if not _np.all(img[:, :, 3] == 255):
                 break
         else:
             # All the alpha values are 255, so drop the alpha channel.
-            self._frames = [frame[:, :, :3] for frame in self._frames]
+            self._frames = [(img[:, :, :3], offset, delay)
+                            for img, offset, delay in self._frames]
 
-        write_apng(self.outfile, self._frames, delay=self._delay)
+        imgs, offsets, delays = zip(*self._frames)
+        write_apng(self.outfile, imgs, offset=offsets, delay=delays)
 
     @_contextlib.contextmanager
     def saving(self, fig, outfile, dpi, *args):
