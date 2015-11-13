@@ -18,13 +18,22 @@ def get_numpngw_version():
             if len(s) == 2 and s[0] == "__version__":
                 return s[1][1:-1]
 
+_long_description = """
+This python package defines the function `write_png` that writes a
+numpy array to a PNG file, and the function `write_apng` that writes
+a sequence of arrays to an animated PNG file.  Also included is the
+class `AnimatedPNGWriter` that can be used to save a Matplotlib
+animation as an animated PNG file.
+"""
 
 setup(
     name='numpngw',
     version=get_numpngw_version(),
     author='Warren Weckesser',
-    description=("Write a numpy array to a PNG file."),
+    description="Write numpy array(s) to a PNG or animated PNG file.",
+    long_description=_long_description,
     license="BSD",
+    url="https://github.com/WarrenWeckesser/numpngw",
     classifiers=[
         "License :: OSI Approved :: BSD License",
         "Intended Audience :: Developers",
