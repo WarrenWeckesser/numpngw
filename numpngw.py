@@ -59,7 +59,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.2-dev0"
+__version__ = "0.0.2.dev0"
 
 
 def _filter0(row, prev_row):
