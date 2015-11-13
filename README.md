@@ -35,6 +35,8 @@ The following script creates this PNG file, an 8-bit RGB image.
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example1.png)
 
+The script::
+
     import numpy as np
     from numpngw import write_png
 
@@ -63,6 +65,8 @@ The following script creates this PNG file, a 1-bit grayscale image.
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example2.png)
 
+The script::
+
     import numpy as np
     from numpngw import write_png
 
@@ -90,6 +94,7 @@ two squares are transparent.
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example3.png)
 
+The script::
 
     import numpy as np
     from numpngw import write_png
@@ -128,6 +133,8 @@ indexed RGB file.
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example4.png)
 
+The script::
+
     import numpy as np
     from numpngw import write_png
 
@@ -164,6 +171,7 @@ simply
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example5.png)
 
+The script::
 
     import numpy as np
     from numpngw import write_apng
@@ -194,6 +202,8 @@ that is passed to `write_apng` is a numpy array with shape
 `(num_frames, height, width, 3)`.
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example6.png)
+
+The script::
 
     import numpy as np
     from numpngw import write_apng
@@ -231,6 +241,8 @@ Example 7
 Create an animated PNG with different display times for each frame.
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example7.png)
+
+The script::
 
     import numpy as np
     from numpngw import write_apng
@@ -360,6 +372,7 @@ with this class--it can easily create very large PNG files.)
 
 ![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example8.png)
 
+The script::
 
     import numpy as np
     import matplotlib.pyplot as plt
