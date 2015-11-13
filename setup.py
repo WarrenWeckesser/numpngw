@@ -1,4 +1,5 @@
 from setuptools import setup
+from os import path
 
 
 def get_numpngw_version():
@@ -18,13 +19,11 @@ def get_numpngw_version():
             if len(s) == 2 and s[0] == "__version__":
                 return s[1][1:-1]
 
-_long_description = """
-This python package defines the function `write_png` that writes a
-numpy array to a PNG file, and the function `write_apng` that writes
-a sequence of arrays to an animated PNG file.  Also included is the
-class `AnimatedPNGWriter` that can be used to save a Matplotlib
-animation as an animated PNG file.
-"""
+
+# Get the long description from README.md.
+_here = path.abspath(path.dirname(__file__))
+with open(path.join(_here, 'README.md')) as f:
+    _long_description = f.read()
 
 setup(
     name='numpngw',
@@ -38,10 +37,17 @@ setup(
         "License :: OSI Approved :: BSD License",
         "Intended Audience :: Developers",
         "Operating System :: OS Independent",
-        "Programming Language :: Python",
+        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 2.6",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.2",
+        "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
     ],
     py_modules=["numpngw"],
     install_requires=[
         'numpy >= 1.6.0',
     ],
+    keywords="numpy png matplotlib animation",
 )
