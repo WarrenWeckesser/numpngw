@@ -1,6 +1,7 @@
 """
 write_png(...) writes a numpy array to a PNG file.
 write_apng(...) writes a sequence of arrays to an APNG file.
+AnimatedPNGWriter is a class that can be used with Matplotlib animations.
 
 This code has no dependencies other than numpy and the python standard
 libraries.
@@ -8,9 +9,8 @@ libraries.
 
 Limitations:
 
-* Only filter type 0 (i.e. no line filter) is implemented.
 * Only tested with Python 2.7 and 3.4 (but it definitely requires
-  at least 2.6).
+  at least python 2.6).
 * _write_text requires the text string to be ASCII.  This might
   be too strong of a requirement.
 * Channel bit depths of 1, 2, or 4 are supported for input arrays
