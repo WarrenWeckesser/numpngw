@@ -63,7 +63,9 @@ def check_trns(file_contents, color_type, transparent):
     return file_contents
 
 
-def check_bkgd(file_contents, color, color_type):
+def check_bkgd(file_contents, color, color_type, palette=None):
+    if color_type == 3 and palette is None:
+        raise ValueError("color_type is 3 but no palette was provided.")
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"bKGD")
     if color_type == 0 or color_type == 4:
@@ -71,8 +73,11 @@ def check_bkgd(file_contents, color, color_type):
     elif color_type == 2 or color_type == 6:
         clr = struct.unpack("!HHH", chunk_data)
     else:
-        clr = struct.unpack("B", chunk_data)
-    # XXX Test the value of clr.
+        # color_type is 3.
+        clr_index = struct.unpack("B", chunk_data)
+        clr = palette[clr_index]
+    assert_equal(clr, color,
+                 "%r != %r  color_type=%r" % (clr, color, color_type))
     return file_contents
 
 
@@ -672,7 +677,8 @@ class TestWritePng(unittest.TestCase):
                                "unexpected palette %r %r" %
                                (plte[-2], expected_palette[-2]))
 
-            file_contents = check_bkgd(file_contents, color=bg, color_type=3)
+            file_contents = check_bkgd(file_contents, color=bg, color_type=3,
+                                       palette=expected_palette)
 
             file_contents = check_idat(file_contents, color_type=3,
                                        bit_depth=bit_depth, interlace=0,
