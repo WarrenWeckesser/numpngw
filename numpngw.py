@@ -59,7 +59,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.3.dev6"
+__version__ = "0.0.3.dev7"
 
 
 def _filter0(row, prev_row):
@@ -149,6 +149,20 @@ def _filter4inv(frow, prev_row):
     return row
 
 
+def _interlace_passes(img):
+    """
+    Return the subimages of img that make up the seven Adam7 interlace passes.
+    """
+    pass1 = img[::8, ::8]
+    pass2 = img[::8, 4::8]
+    pass3 = img[4::8, ::4]
+    pass4 = img[::4, 2::4]
+    pass5 = img[2::4, ::2]
+    pass6 = img[::2, 1::2]
+    pass7 = img[1::2, :]
+    return (pass1, pass2, pass3, pass4, pass5, pass6, pass7)
+
+
 def _create_stream(a, filter_type=None):
     """
     Convert the data in `a` into a python string.
@@ -201,10 +215,11 @@ def _write_chunk(f, chunk_type, chunk_data):
     f.write(length + content + crc)
 
 
-def _write_ihdr(f, width, height, nbits, color_type):
+def _write_ihdr(f, width, height, nbits, color_type, interlace):
     """Write an IHDR chunk to `f`."""
     fmt = "!IIBBBBB"
-    chunk_data = _struct.pack(fmt, width, height, nbits, color_type, 0, 0, 0)
+    chunk_data = _struct.pack(fmt, width, height, nbits, color_type, 0, 0,
+                              interlace)
     _write_chunk(f, b"IHDR", chunk_data)
 
 
@@ -306,7 +321,7 @@ def _write_fdat(f, sequence_number, data):
 
 
 def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
-                filter_type=None):
+                filter_type=None, interlace=0):
     """
     Write the image data in the array `a` to the file, using IDAT chunks
     if sequence_number is None and fdAT chunks otherwise.
@@ -316,27 +331,35 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
     If `sequence_number` is None, 'IDAT' chunks are written.
     If `sequence_number` is not None, `fdAT` chunks are written.
 
+    `interlace` must be 0 or 1.  It determines the interlace method.
+    0 mean no interlacing; 1 means Adam7 interlacing.
+
     Returns the number of chunks written to the file.
 
     `filter_type` is passed on to _create_stream().
     """
-    if bitdepth is not None and bitdepth < 8:
-        data = _pack(a, bitdepth)
+    if interlace == 1:
+        passes = _interlace_passes(a)
     else:
-        data = a
+        passes = [a]
 
-    if filter_type != "auto":
-        stream = _create_stream(data, filter_type=filter_type)
-        zstream = _zlib.compress(stream)
+    if bitdepth is not None and bitdepth < 8:
+        passes = [_pack(a, bitdepth) for a in passes]
+
+    if filter_type == "auto":
+        filter_types = [0, 1, 2, 3, 4, "heuristic"]
     else:
-        # filter_type is "auto", so try them all and pick the one
-        # that gives the best compression (i.e. smallest zstream).
-        zstream = None
-        for filter_type in [0, 1, 2, 3, 4, "heuristic"]:
-            s = _create_stream(data, filter_type=filter_type)
-            z = _zlib.compress(s)
-            if zstream is None or len(z) < len(zstream):
-                zstream = z
+        filter_types = [filter_type]
+
+    zstream = None
+    for filter_type in filter_types:
+        stream = ''
+        for a in passes:
+            if a.size > 0:
+                stream += _create_stream(a, filter_type=filter_type)
+        z = _zlib.compress(stream)
+        if zstream is None or len(z) < len(zstream):
+            zstream = z
 
     # zstream is a string containing the packed, compressed version of the
     # data from the array `a`.  This will be written to the file in one or
@@ -576,7 +599,7 @@ def _add_background_color(background, palette, trans):
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
               timestamp=None, gamma=None, background=None,
-              filter_type=None):
+              filter_type=None, interlace=0):
     """
     Write a numpy array to a PNG file.
 
@@ -636,6 +659,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         chunks.  The default is "auto", which means the output data is
         generated six time, once for each of the other possible filter
         types, and the filter that generates the smallest output is used.
+    interlace : either 0 or 1
+        Interlace method to use.  0 means no interlace; 1 means Adam7.
 
     Notes
     -----
@@ -683,6 +708,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         that the non-breaking space (code 160) is not permitted in keywords,
         since it is visually indistinguishable from an ordinary space.
     """
+
+    if interlace not in [0, 1]:
+        raise ValueError('interlace must be 0 or 1.')
 
     if filter_type is None:
         filter_type = "auto"
@@ -774,7 +802,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         nbits = bitdepth
     else:
         nbits = a.dtype.itemsize*8
-    _write_ihdr(f, a.shape[1], a.shape[0], nbits, color_type)
+    _write_ihdr(f, a.shape[1], a.shape[0], nbits, color_type, interlace)
 
     # tEXt chunks, if any.
     if text_list is not None:
@@ -801,7 +829,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
     # _write_data(...) writes the IDAT chunk(s).
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
-                filter_type=filter_type)
+                filter_type=filter_type, interlace=interlace)
 
     # IEND chunk
     _write_iend(f)
@@ -844,7 +872,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
-               background=None, filter_type=None):
+               background=None, filter_type=None, interlace=0):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -921,6 +949,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         each frame is generated six time, once for each of the other
         possible filter types, and the filter that generates the smallest
         output is used.
+    interlace : either 0 or 1
+        Interlace method to use.  0 means no interlace; 1 means Adam7.
 
     Notes
     -----
@@ -928,6 +958,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     See the `write_png` docstring for additional details about some
     of the arguments.
     """
+    if interlace not in [0, 1]:
+        raise ValueError('interlace must be 0 or 1.')
 
     if filter_type is None:
         filter_type = "auto"
@@ -1055,7 +1087,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         nbits = bitdepth
     else:
         nbits = seq[0].dtype.itemsize*8
-    _write_ihdr(f, width, height, nbits, color_type)
+    _write_ihdr(f, width, height, nbits, color_type, interlace)
 
     # tEXt chunks, if any.
     if text_list is not None:
@@ -1102,12 +1134,12 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         frame_number += 1
         # IDAT chunk(s) for the first frame (no sequence_number)
         _write_data(f, seq[0], bitdepth, max_chunk_len=max_chunk_len,
-                    filter_type=filter_type)
+                    filter_type=filter_type, interlace=interlace)
         seq = seq[1:]
     else:
         # IDAT chunk(s) for the default image
         _write_data(f, default_image, bitdepth, max_chunk_len=max_chunk_len,
-                    filter_type=filter_type)
+                    filter_type=filter_type, interlace=interlace)
 
     for frame in seq:
         # fcTL chunk for the next frame
@@ -1125,7 +1157,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         num_chunks = _write_data(f, frame, bitdepth,
                                  max_chunk_len=max_chunk_len,
                                  sequence_number=sequence_number,
-                                 filter_type=filter_type)
+                                 filter_type=filter_type, interlace=interlace)
         sequence_number += num_chunks
 
     # IEND chunk
