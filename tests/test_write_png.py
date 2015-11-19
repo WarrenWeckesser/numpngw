@@ -28,12 +28,12 @@ def check_signature(s):
 
 
 def check_ihdr(file_contents, width, height, bit_depth, color_type,
-               compression_method=0, filter_method=0, interface_method=0):
+               compression_method=0, filter_method=0, interlace=0):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IHDR")
     values = struct.unpack("!IIBBBBB", chunk_data)
     expected = (width, height, bit_depth, color_type, compression_method,
-                filter_method, interface_method)
+                filter_method, interlace)
     assert_equal(values, expected)
     return file_contents
 
@@ -76,21 +76,23 @@ def check_bkgd(file_contents, color, color_type):
     return file_contents
 
 
-def check_idat(file_contents, color_type, bit_depth, img, palette=None):
+def check_idat(file_contents, color_type, bit_depth, interlace, img,
+               palette=None):
     # This function assumes the entire image is in the chunk.
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IDAT")
     decompressed = zlib.decompress(chunk_data)
     stream = np.fromstring(decompressed, dtype=np.uint8)
     height, width = img.shape[:2]
-    img2 = stream_to_array(stream, width, height, color_type, bit_depth)
+    img2 = stream_to_array(stream, width, height, color_type, bit_depth,
+                           interlace)
     if palette is not None:
         img2 = palette[img2]
     assert_array_equal(img2, img)
     return file_contents
 
 
-def stream_to_array(stream, width, height, color_type, bit_depth):
+def stream_to_array_old(stream, width, height, color_type, bit_depth):
     # `stream` is 1-d numpy array with dytpe np.uint8 containing the
     # data from one or more IDAT or fdAT chunks.
     #
@@ -183,6 +185,148 @@ def stream_to_array(stream, width, height, color_type, bit_depth):
     return img
 
 
+def img_color_format(color_type, bitdepth):
+    """
+    Given a color type and a bit depth, return the length
+    of the color dimension and the data type of the numpy
+    array that will hold an image with those parameters.
+    """
+    # nchannels is a map from color_type to the number of color
+    # channels (e.g. an RGB image has three channels).
+    nchannels = {0: 1,  # grayscale
+                 2: 3,  # RGB
+                 3: 1,  # indexed RGB
+                 4: 2,  # grayscale+alpha
+                 6: 4}  # RGBA
+    if color_type == 3:
+        dtype = np.uint8
+    else:
+        dtype = np.uint8 if bitdepth <= 8 else np.uint16
+    return nchannels[color_type], dtype
+
+
+def stream_to_array(stream, width, height, color_type, bit_depth, interlace=0):
+    # `stream` is 1-d numpy array with dytpe np.uint8 containing the
+    # data from one or more IDAT or fdAT chunks.
+    #
+    # This function converts `stream` to a numpy array.
+
+    img_color_dim, img_dtype = img_color_format(color_type, bit_depth)
+    if img_color_dim == 1:
+        img_shape = (height, width)
+    else:
+        img_shape = (height, width, img_color_dim)
+    img = np.empty(img_shape, dtype=img_dtype)
+
+    if interlace == 1:
+        passes = numpngw._interlace_passes(img)
+    else:
+        passes = [img]
+
+    pass_start_index = 0
+    for a in passes:
+        if a.size == 0:
+            continue
+        pass_height, pass_width = a.shape[:2]
+        ncols, rembits = divmod(pass_width*bit_depth, 8)
+        ncols += rembits > 0
+
+        if bit_depth < 8:
+            bytes_per_pixel = 1  # Not really, but we need 1 here for later.
+            data_bytes_per_line = ncols
+        else:
+            # nchannels is a map from color_type to the number of color
+            # channels (e.g. an RGB image has three channels).
+            nchannels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
+            bytes_per_channel = bit_depth // 8
+            bytes_per_pixel = bytes_per_channel * nchannels[color_type]
+            data_bytes_per_line = bytes_per_pixel * pass_width
+
+        data_width = data_bytes_per_line / bytes_per_pixel
+
+        pass_end_index = (pass_start_index +
+                          pass_height * (data_bytes_per_line + 1))
+        shp = (pass_height, data_bytes_per_line + 1)
+        lines = stream[pass_start_index:pass_end_index].reshape(shp)
+        pass_start_index = pass_end_index
+
+        prev = np.zeros((data_width, bytes_per_pixel), dtype=np.uint8)
+        shp = (pass_height, data_width, bytes_per_pixel)
+        p = np.empty(shp, dtype=np.uint8)
+        for k in range(lines.shape[0]):
+            line_filter_type = lines[k, 0]
+            filtered = lines[k, 1:].reshape(-1, bytes_per_pixel)
+            if line_filter_type == 0:
+                p[k] = filtered
+            elif line_filter_type == 1:
+                p[k] = numpngw._filter1inv(filtered, prev)
+            elif line_filter_type == 2:
+                p[k] = numpngw._filter2inv(filtered, prev)
+            elif line_filter_type == 3:
+                p[k] = numpngw._filter3inv(filtered, prev)
+            elif line_filter_type == 4:
+                p[k] = numpngw._filter4inv(filtered, prev)
+            else:
+                raise ValueError('invalid filter type: %i' %
+                                 (line_filter_type,))
+            prev = p[k]
+
+        # As this point, p has data type uint8 and has shape
+        # (height, width, bytes_per_pixel).
+        # 16 bit components of the pixel are stored in big-endian format.
+
+        uint8to16 = np.array([256, 1], dtype=np.uint16)
+
+        if color_type == 0:
+            # grayscale
+            if bit_depth == 16:
+                pass_img = p.dot(uint8to16)
+            elif bit_depth == 8:
+                pass_img = p[:, :, 0]
+            else:  # bit_depth is 1, 2 or 4.
+                pass_img = numpngw._unpack(p.reshape(pass_height, -1),
+                                           bitdepth=bit_depth,
+                                           width=pass_width)
+
+        elif color_type == 2:
+            # RGB
+            if bit_depth == 16:
+                # Combine high and low bytes to 16-bit values.
+                shp = (pass_height, pass_width, 3, 2)
+                pass_img = p.reshape(shp).dot(uint8to16)
+            else:  # bit_depth is 8.
+                pass_img = p
+
+        elif color_type == 3:
+            # indexed
+            pass_img = p[:, :, 0]
+
+        elif color_type == 4:
+            # grayscale with alpha
+            if bit_depth == 16:
+                # Combine high and low bytes to 16-bit values.
+                shp = (pass_height, pass_width, 2, 2)
+                pass_img = p.reshape(shp).dot(uint8to16)
+            else:  # bit_depth is 8.
+                pass_img = p
+
+        elif color_type == 6:
+            # RGBA
+            if bit_depth == 16:
+                # Combine high and low bytes to 16-bit values.
+                shp = (pass_height, pass_width, 4, 2)
+                pass_img = p.reshape(shp).dot(uint8to16)
+            else:  # bit_depth is 8.
+                pass_img = p
+
+        else:
+            raise RuntimeError('invalid color type %r' % (color_type,))
+
+        a[...] = pass_img
+
+    return img
+
+
 def check_actl(file_contents, num_frames, num_plays):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"acTL")
@@ -239,35 +383,42 @@ class TestWritePng(unittest.TestCase):
         for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
             for bitdepth in [1, 2, 4, 8, 16]:
                 for transparent in [None, 0]:
-                    dt = np.uint16 if bitdepth == 16 else np.uint8
-                    maxval = 2**bitdepth
-                    img = np.random.randint(0, maxval, size=(3, 11)).astype(dt)
-                    if transparent is not None:
-                        img[2:4, 2:] = transparent
+                    for interlace in [0, 1]:
+                        dt = np.uint16 if bitdepth == 16 else np.uint8
+                        maxval = 2**bitdepth
+                        sz = (3, 11)
+                        img = np.random.randint(0, maxval, size=sz).astype(dt)
+                        if transparent is not None:
+                            img[2:4, 2:] = transparent
 
-                    f = io.BytesIO()
-                    numpngw.write_png(f, img, bitdepth=bitdepth,
-                                      transparent=transparent,
-                                      filter_type=filter_type)
+                        f = io.BytesIO()
+                        numpngw.write_png(f, img, bitdepth=bitdepth,
+                                          transparent=transparent,
+                                          filter_type=filter_type,
+                                          interlace=interlace)
 
-                    file_contents = f.getvalue()
+                        file_contents = f.getvalue()
 
-                    file_contents = check_signature(file_contents)
+                        file_contents = check_signature(file_contents)
 
-                    file_contents = check_ihdr(file_contents,
-                                               width=img.shape[1],
-                                               height=img.shape[0],
-                                               bit_depth=bitdepth,
-                                               color_type=0)
+                        file_contents = check_ihdr(file_contents,
+                                                   width=img.shape[1],
+                                                   height=img.shape[0],
+                                                   bit_depth=bitdepth,
+                                                   color_type=0,
+                                                   interlace=interlace)
 
-                    if transparent is not None:
-                        file_contents = check_trns(file_contents, color_type=0,
-                                                   transparent=transparent)
+                        if transparent is not None:
+                            file_contents = check_trns(file_contents,
+                                                       color_type=0,
+                                                       transparent=transparent)
 
-                    file_contents = check_idat(file_contents, color_type=0,
-                                               bit_depth=bitdepth, img=img)
+                        file_contents = check_idat(file_contents, color_type=0,
+                                                   bit_depth=bitdepth,
+                                                   interlace=interlace,
+                                                   img=img)
 
-                    check_iend(file_contents)
+                        check_iend(file_contents)
 
     def test_write_png_with_alpha(self):
         # Test creation of grayscale+alpha and RGBA images (color types 4
@@ -279,26 +430,32 @@ class TestWritePng(unittest.TestCase):
             for color_type in [4, 6]:
                 num_channels = 2 if color_type == 4 else 4
                 for bit_depth in [8, 16]:
-                    dt = np.uint8 if bit_depth == 8 else np.uint16
-                    img = np.random.randint(0, 2**bit_depth,
-                                            size=(h, w, num_channels)).astype(dt)
-                    f = io.BytesIO()
-                    numpngw.write_png(f, img, filter_type=filter_type)
+                    for interlace in [0, 1]:
+                        dt = np.uint8 if bit_depth == 8 else np.uint16
+                        sz = (h, w, num_channels)
+                        img = np.random.randint(0, 2**bit_depth,
+                                                size=sz).astype(dt)
+                        f = io.BytesIO()
+                        numpngw.write_png(f, img, filter_type=filter_type,
+                                          interlace=interlace)
 
-                    file_contents = f.getvalue()
+                        file_contents = f.getvalue()
 
-                    file_contents = check_signature(file_contents)
+                        file_contents = check_signature(file_contents)
 
-                    file_contents = check_ihdr(file_contents,
-                                               width=w, height=h,
-                                               bit_depth=bit_depth,
-                                               color_type=color_type)
+                        file_contents = check_ihdr(file_contents,
+                                                   width=w, height=h,
+                                                   bit_depth=bit_depth,
+                                                   color_type=color_type,
+                                                   interlace=interlace)
 
-                    file_contents = check_idat(file_contents,
-                                               color_type=color_type,
-                                               bit_depth=bit_depth, img=img)
+                        file_contents = check_idat(file_contents,
+                                                   color_type=color_type,
+                                                   bit_depth=bit_depth,
+                                                   interlace=interlace,
+                                                   img=img)
 
-                    check_iend(file_contents)
+                        check_iend(file_contents)
 
     def test_write_png_RGB(self):
         # Test creation of RGB images (color type 2), with and without
@@ -309,67 +466,76 @@ class TestWritePng(unittest.TestCase):
         for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
             for transparent in [None, (0, 0, 0)]:
                 for bit_depth in [8, 16]:
-                    dt = np.uint16 if bit_depth == 16 else np.uint8
-                    maxval = 2**bit_depth
-                    img = np.random.randint(0, maxval,
-                                            size=(h, w, 3)).astype(dt)
-                    if transparent:
-                        img[2:4, 2:4] = transparent
+                    for interlace in [0, 1]:
+                        dt = np.uint16 if bit_depth == 16 else np.uint8
+                        maxval = 2**bit_depth
+                        img = np.random.randint(0, maxval,
+                                                size=(h, w, 3)).astype(dt)
+                        if transparent:
+                            img[2:4, 2:4] = transparent
 
-                    f = io.BytesIO()
-                    numpngw.write_png(f, img, transparent=transparent,
-                                      filter_type=filter_type)
+                        f = io.BytesIO()
+                        numpngw.write_png(f, img, transparent=transparent,
+                                          filter_type=filter_type,
+                                          interlace=interlace)
 
-                    file_contents = f.getvalue()
+                        file_contents = f.getvalue()
 
-                    file_contents = check_signature(file_contents)
+                        file_contents = check_signature(file_contents)
 
-                    file_contents = check_ihdr(file_contents,
-                                               width=w, height=h,
-                                               bit_depth=bit_depth,
-                                               color_type=2)
+                        file_contents = check_ihdr(file_contents,
+                                                   width=w, height=h,
+                                                   bit_depth=bit_depth,
+                                                   color_type=2,
+                                                   interlace=interlace)
 
-                    if transparent:
-                        file_contents = check_trns(file_contents, color_type=2,
-                                                   transparent=transparent)
+                        if transparent:
+                            file_contents = check_trns(file_contents,
+                                                       color_type=2,
+                                                       transparent=transparent)
 
-                    file_contents = check_idat(file_contents, color_type=2,
-                                               bit_depth=bit_depth, img=img)
+                        file_contents = check_idat(file_contents, color_type=2,
+                                                   bit_depth=bit_depth,
+                                                   interlace=interlace,
+                                                   img=img)
 
-                    check_iend(file_contents)
+                        check_iend(file_contents)
 
     def test_write_png_8bit_RGB_palette(self):
-        img = np.arange(4*5*3, dtype=np.uint8).reshape(4, 5, 3)
-        f = io.BytesIO()
-        numpngw.write_png(f, img, use_palette=True)
+        for interlace in [0, 1]:
+            img = np.arange(4*5*3, dtype=np.uint8).reshape(4, 5, 3)
+            f = io.BytesIO()
+            numpngw.write_png(f, img, use_palette=True, interlace=interlace)
 
-        file_contents = f.getvalue()
+            file_contents = f.getvalue()
 
-        file_contents = check_signature(file_contents)
+            file_contents = check_signature(file_contents)
 
-        file_contents = check_ihdr(file_contents,
-                                   width=img.shape[1], height=img.shape[0],
-                                   bit_depth=8, color_type=3)
+            file_contents = check_ihdr(file_contents,
+                                       width=img.shape[1], height=img.shape[0],
+                                       bit_depth=8, color_type=3,
+                                       interlace=interlace)
 
-        # Check the PLTE chunk.
-        chunk_type, chunk_data, file_contents = next_chunk(file_contents)
-        self.assertEqual(chunk_type, b"PLTE")
-        p = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
-        assert_array_equal(p, np.arange(4*5*3, dtype=np.uint8).reshape(-1, 3))
+            # Check the PLTE chunk.
+            chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+            self.assertEqual(chunk_type, b"PLTE")
+            p = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
+            n = 4*5*3
+            assert_array_equal(p, np.arange(n, dtype=np.uint8).reshape(-1, 3))
 
-        # Check the IDAT chunk.
-        chunk_type, chunk_data, file_contents = next_chunk(file_contents)
-        self.assertEqual(chunk_type, b"IDAT")
-        decompressed = zlib.decompress(chunk_data)
-        stream = np.fromstring(decompressed, dtype=np.uint8)
-        height, width = img.shape[:2]
-        img2 = stream_to_array(stream, width, height, color_type=3,
-                               bit_depth=8)
+            # Check the IDAT chunk.
+            chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+            self.assertEqual(chunk_type, b"IDAT")
+            decompressed = zlib.decompress(chunk_data)
+            stream = np.fromstring(decompressed, dtype=np.uint8)
+            height, width = img.shape[:2]
+            img2 = stream_to_array(stream, width, height, color_type=3,
+                                   bit_depth=8, interlace=interlace)
 
-        expected = np.arange(20, dtype=np.uint8).reshape(img.shape[:2])
-        assert_array_equal(img2, expected)
+            expected = np.arange(20, dtype=np.uint8).reshape(img.shape[:2])
+            assert_array_equal(img2, expected)
 
-        check_iend(file_contents)
+            check_iend(file_contents)
 
     def test_write_png_max_chunk_len(self):
         # Create an 8-bit grayscale image.
@@ -386,7 +552,7 @@ class TestWritePng(unittest.TestCase):
 
         file_contents = check_ihdr(file_contents,
                                    width=w, height=h,
-                                   bit_depth=8, color_type=0)
+                                   bit_depth=8, color_type=0, interlace=0)
 
         zstream = b''
         while True:
@@ -423,14 +589,14 @@ class TestWritePng(unittest.TestCase):
 
         file_contents = check_ihdr(file_contents,
                                    width=img.shape[1], height=img.shape[0],
-                                   bit_depth=8, color_type=0)
+                                   bit_depth=8, color_type=0, interlace=0)
 
         file_contents = check_time(file_contents, timestamp)
 
         file_contents = check_gama(file_contents, gamma)
 
         file_contents = check_idat(file_contents, color_type=0, bit_depth=8,
-                                   img=img)
+                                   interlace=0, img=img)
 
         check_iend(file_contents)
 
@@ -453,12 +619,14 @@ class TestWritePng(unittest.TestCase):
             file_contents = check_signature(file_contents)
 
             file_contents = check_ihdr(file_contents, width=w, height=h,
-                                       bit_depth=bit_depth, color_type=2)
+                                       bit_depth=bit_depth, color_type=2,
+                                       interlace=0)
 
             file_contents = check_bkgd(file_contents, color=bg, color_type=2)
 
             file_contents = check_idat(file_contents, color_type=2,
-                                       bit_depth=bit_depth, img=img)
+                                       bit_depth=bit_depth, interlace=0,
+                                       img=img)
 
             check_iend(file_contents)
 
@@ -485,7 +653,8 @@ class TestWritePng(unittest.TestCase):
             file_contents = check_signature(file_contents)
 
             file_contents = check_ihdr(file_contents, width=w, height=h,
-                                       bit_depth=bit_depth, color_type=3)
+                                       bit_depth=bit_depth, color_type=3,
+                                       interlace=0)
 
             # Check the PLTE chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
@@ -506,8 +675,8 @@ class TestWritePng(unittest.TestCase):
             file_contents = check_bkgd(file_contents, color=bg, color_type=3)
 
             file_contents = check_idat(file_contents, color_type=3,
-                                       bit_depth=bit_depth, img=img,
-                                       palette=plte)
+                                       bit_depth=bit_depth, interlace=0,
+                                       img=img, palette=plte)
 
             check_iend(file_contents)
 
@@ -531,10 +700,12 @@ class TestWritePngFilterType(unittest.TestCase):
         file_contents = check_ihdr(file_contents,
                                    width=img.shape[1],
                                    height=img.shape[0],
-                                   bit_depth=bitdepth, color_type=0)
+                                   bit_depth=bitdepth, color_type=0,
+                                   interlace=0)
 
         file_contents = check_idat(file_contents, color_type=0,
-                                   bit_depth=bitdepth, img=img)
+                                   bit_depth=bitdepth, interlace=0,
+                                   img=img)
 
         check_iend(file_contents)
 
@@ -556,7 +727,7 @@ class TestWriteApng(unittest.TestCase):
         file_contents = check_signature(file_contents)
 
         file_contents = check_ihdr(file_contents, width=w, height=h,
-                                   bit_depth=8, color_type=6)
+                                   bit_depth=8, color_type=6, interlace=0)
 
         file_contents = check_actl(file_contents, num_frames=num_frames,
                                    num_plays=0)
@@ -568,7 +739,7 @@ class TestWriteApng(unittest.TestCase):
         sequence_number += 1
 
         file_contents = check_idat(file_contents, color_type=6, bit_depth=8,
-                                   img=seq[0])
+                                   interlace=0, img=seq[0])
 
         for k in range(1, num_frames):
             file_contents = check_fctl(file_contents,
@@ -610,7 +781,7 @@ class TestWriteApng(unittest.TestCase):
         file_contents = check_signature(file_contents)
 
         file_contents = check_ihdr(file_contents, width=w, height=h,
-                                   bit_depth=8, color_type=6)
+                                   bit_depth=8, color_type=6, interlace=0)
 
         file_contents = check_actl(file_contents, num_frames=num_frames,
                                    num_plays=0)
@@ -618,7 +789,7 @@ class TestWriteApng(unittest.TestCase):
         sequence_number = 0
 
         file_contents = check_idat(file_contents, color_type=6, bit_depth=8,
-                                   img=default_image)
+                                   interlace=0, img=default_image)
 
         for k in range(0, num_frames):
             file_contents = check_fctl(file_contents,
