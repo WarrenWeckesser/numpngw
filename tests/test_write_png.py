@@ -130,7 +130,7 @@ def stream_to_array(stream, width, height, color_type, bit_depth):
         elif line_filter_type == 4:
             p[k] = numpngw._filter4inv(filtered, prev)
         else:
-            raise ValueError('invalid fitlter type: %i' % (line_filter_type,))
+            raise ValueError('invalid filter type: %i' % (line_filter_type,))
         prev = p[k]
 
     # As this point, p has data type uint8 and has shape
