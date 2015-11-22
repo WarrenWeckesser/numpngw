@@ -344,7 +344,7 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
         passes = [a]
 
     if bitdepth is not None and bitdepth < 8:
-        passes = [_pack(a, bitdepth) for a in passes]
+        passes = [_pack(aa, bitdepth) for aa in passes]
 
     if filter_type == "auto":
         filter_types = [0, 1, 2, 3, 4, "heuristic"]
@@ -543,21 +543,19 @@ def _get_color_type(a, use_palette):
 
 
 def _validate_bitdepth(bitdepth, a, color_type):
+    if bitdepth not in [None, 1, 2, 4, 8, 16]:
+        raise ValueError('bitdepth %i is not valid.  Valid values are '
+                         '1, 2, 4, 8 or 16' % (bitdepth,))
+
     if bitdepth is not None:
-        if color_type != 0:
-            raise ValueError('bitdepth may only be specified for grayscale '
-                             'images with no alpha channel')
-        if bitdepth not in [1, 2, 4, 8, 16]:
-            raise ValueError('bitdepth %i is not valid.  Valid values are '
-                             '1, 2, 4, 8 or 16' % (bitdepth,))
-        if bitdepth == 16:
-            if a.dtype != _np.uint16:
-                raise ValueError('Input array must have dtype uint16 when '
-                                 'bitdepth=16 is given.')
-        else:
-            if a.dtype != _np.uint8:
-                raise ValueError('Input array must have dtype uint8 when '
-                                 'bitdepth < 8 is given.')
+        if color_type in [2, 4, 6]:
+            if 8*a.dtype.itemsize != bitdepth:
+                raise ValueError("For the given input, the bit depth must "
+                                 "match the data type of the array.")
+        elif color_type == 3:
+            if bitdepth == 16:
+                raise ValueError("Bit depth 16 not allowed when use_palette "
+                                 "is True.")
 
 
 def _validate_timestamp(timestamp):
@@ -568,7 +566,7 @@ def _validate_timestamp(timestamp):
     return timestamp
 
 
-def _add_background_color(background, palette, trans):
+def _add_background_color(background, palette, trans, bitdepth):
     if len(background) != 3:
         raise ValueError("background must have length 3 when "
                          "use_palette is True.")
@@ -579,10 +577,14 @@ def _add_background_color(background, palette, trans):
     else:
         # The given background color is *not* in the palette.  Is there
         # room for one more color?
-        if len(palette) == 256:
-            msg = ("The array has 256 colors, and a background color "
-                   "that is not in the array has been given.  No more "
-                   "than 256 colors are allowed when using a palette.")
+        if bitdepth is None:
+            bitdepth = 8
+        if len(palette) == 2**bitdepth:
+            msg = ("The array already has the maximum of %i colors, and a "
+                   "background color that is not in the array has been given. "
+                   "With a bitdepth of %i, no more than %i colors are allowed "
+                   "when using a palette." % (2**bitdepth, bitdepth,
+                                              2**bitdepth))
             raise ValueError(msg)
         else:
             index = len(palette)
@@ -619,8 +621,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         of `a` is (m, n, 3), then a PLTE chunk is created and an indexed color
         image is created.  (If the conditions on `a` are not true, this
         argument is ignored and a palette is not created.)  There must not be
-        more than 256 distinct colors in `a`.  If the conditions on `a` are
-        true but the array has more than 256 colors, a ValueError exception
+        more than 2**bitdepth distinct colors in `a`.  If the conditions on `a`
+        are true but the array has more than 256 colors, a ValueError exception
         is raised.
     transparent : integer or 3-tuple of integers (r, g, b), optional
         If the colors in `a` do not include an alpha channel (i.e. the shape
@@ -730,6 +732,23 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     #      3        8 bit indexed RGB or RGBA  Series of 1 byte alpha values
     #      4        Grayscale and alpha
     #      6        RGBA
+    #
+    #
+    # from http://www.w3.org/TR/PNG/:
+    # Table 11.1 - Allowed combinations of colour type and bit depth
+    #
+    #                      Color  Allowed
+    # PNG image type       type  bit depths      Interpretation
+    # Greyscale              0   1, 2, 4, 8, 16  Each pixel is a greyscale
+    #                                            sample
+    # Truecolour             2   8, 16           Each pixel is an RGB triple
+    # Indexed-colour         3   1, 2, 4, 8      Each pixel is a palette index;
+    #                                            a PLTE chunk shall appear.
+    # Greyscale with alpha   4   8, 16           Each pixel is a greyscale
+    #                                            sample followed by an alpha
+    #                                            sample.
+    # Truecolour with alpha  6   8, 16           Each pixel is an RGB triple
+    #                                            followed by an alpha sample.
 
     color_type = _get_color_type(a, use_palette)
 
@@ -743,19 +762,22 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         # into the array `palette`, which contains the colors.  `trans` is
         # either None (if there was no alpha channel), or an array the same
         # length as `palette` containing the alpha values of the colors.
-        if len(palette) > 256:
-            raise ValueError("The array has %d colors.  No more than 256 "
-                             "colors are allowed when using a palette." %
-                             len(palette))
+        max_num_colors = 2**bitdepth if bitdepth is not None else 256
+        if len(palette) > max_num_colors:
+            raise ValueError("The array has %d colors.  With bit depth %i, "
+                             "no more than %i colors are allowed when using "
+                             "a palette." %
+                             (len(palette), bitdepth, max_num_colors))
 
         if background is not None:
             # A default background color has been given, and we're creating
             # an indexed palette (use_palette is True).  Convert the given
             # background color to an index.  If the color is not in the
             # palette, extend the palette with the new color (or raise an
-            # error if there are already 256 colors).
+            # error if there are already 2**bitdepth colors).
             background, palette, trans = _add_background_color(background,
-                                                               palette, trans)
+                                                               palette, trans,
+                                                               bitdepth)
 
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given
@@ -778,9 +800,6 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     elif (color_type == 0 or color_type == 2) and transparent is not None:
         # XXX Should do some validation of `transparent`...
         trans = _np.asarray(transparent, dtype=_np.uint16)
-
-    if bitdepth == 8 and a.dtype == _np.uint8:
-        bitdepth = None
 
     _validate_bitdepth(bitdepth, a, color_type)
 

@@ -32,9 +32,12 @@ def check_ihdr(file_contents, width, height, bit_depth, color_type,
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IHDR")
     values = struct.unpack("!IIBBBBB", chunk_data)
-    expected = (width, height, bit_depth, color_type, compression_method,
-                filter_method, interlace)
-    assert_equal(values, expected)
+    assert_equal(values[:2], (width, height), "wrong width and height")
+    assert_equal(values[2], bit_depth, "wrong bit depth")
+    assert_equal(values[3], color_type, "wrong color type")
+    assert_equal(values[4], compression_method, "wrong compression method")
+    assert_equal(values[5], filter_method, "wrong filter method")
+    assert_equal(values[6], interlace, "wrong interlace")
     return file_contents
 
 
@@ -307,7 +310,11 @@ def stream_to_array(stream, width, height, color_type, bit_depth, interlace=0):
 
         elif color_type == 3:
             # indexed
-            pass_img = p[:, :, 0]
+            if bit_depth < 8:
+                pass_img = numpngw._unpack(p[:, :, 0], bitdepth=bit_depth,
+                                           width=pass_width)
+            else:
+                pass_img = p[:, :, 0]
 
         elif color_type == 4:
             # grayscale with alpha
@@ -512,51 +519,60 @@ class TestWritePng(unittest.TestCase):
     def test_write_png_8bit_RGB_palette(self):
         for interlace in [0, 1]:
             for transparent in [None, (0, 1, 2)]:
-                img = np.arange(4*5*3, dtype=np.uint8).reshape(4, 5, 3)
-                f = io.BytesIO()
-                numpngw.write_png(f, img, use_palette=True,
-                                  transparent=transparent,
-                                  interlace=interlace)
+                for bitdepth in [1, 2, 4, 8]:
+                    w = 13
+                    h = 4
+                    ncolors = min(2**bitdepth, w*h)
+                    idx = np.arange(w*h).reshape(h, w) % ncolors
+                    colors = np.arange(ncolors*3).reshape(ncolors, 3)
+                    colors = colors.astype(np.uint8)
+                    img = colors[idx]
+                    f = io.BytesIO()
+                    numpngw.write_png(f, img, use_palette=True,
+                                      transparent=transparent,
+                                      interlace=interlace,
+                                      bitdepth=bitdepth)
 
-                file_contents = f.getvalue()
+                    file_contents = f.getvalue()
 
-                file_contents = check_signature(file_contents)
+                    file_contents = check_signature(file_contents)
 
-                file_contents = check_ihdr(file_contents,
-                                           width=img.shape[1],
-                                           height=img.shape[0],
-                                           bit_depth=8, color_type=3,
-                                           interlace=interlace)
-
-                # Check the PLTE chunk.
-                chunk_type, chunk_data, file_contents = \
-                    next_chunk(file_contents)
-                self.assertEqual(chunk_type, b"PLTE")
-                p = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
-                n = 4*5*3
-                expected = np.arange(n, dtype=np.uint8).reshape(-1, 3)
-                assert_array_equal(p, expected)
-
-                if transparent is not None:
-                    file_contents = check_trns(file_contents,
+                    file_contents = check_ihdr(file_contents,
+                                               width=img.shape[1],
+                                               height=img.shape[0],
+                                               bit_depth=bitdepth,
                                                color_type=3,
-                                               transparent=transparent,
-                                               palette=p)
+                                               interlace=interlace)
 
-                # Check the IDAT chunk.
-                chunk_type, chunk_data, file_contents = \
-                    next_chunk(file_contents)
-                self.assertEqual(chunk_type, b"IDAT")
-                decompressed = zlib.decompress(chunk_data)
-                stream = np.fromstring(decompressed, dtype=np.uint8)
-                height, width = img.shape[:2]
-                img2 = stream_to_array(stream, width, height, color_type=3,
-                                       bit_depth=8, interlace=interlace)
+                    # Check the PLTE chunk.
+                    chunk_type, chunk_data, file_contents = \
+                        next_chunk(file_contents)
+                    self.assertEqual(chunk_type, b"PLTE")
+                    p = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
+                    n = ncolors*3
+                    expected = np.arange(n, dtype=np.uint8).reshape(-1, 3)
+                    assert_array_equal(p, expected)
 
-                expected = np.arange(20, dtype=np.uint8).reshape(img.shape[:2])
-                assert_array_equal(img2, expected)
+                    if transparent is not None:
+                        file_contents = check_trns(file_contents,
+                                                   color_type=3,
+                                                   transparent=transparent,
+                                                   palette=p)
 
-                check_iend(file_contents)
+                    # Check the IDAT chunk.
+                    chunk_type, chunk_data, file_contents = \
+                        next_chunk(file_contents)
+                    self.assertEqual(chunk_type, b"IDAT")
+                    decompressed = zlib.decompress(chunk_data)
+                    stream = np.fromstring(decompressed, dtype=np.uint8)
+                    height, width = img.shape[:2]
+                    img2 = stream_to_array(stream, width, height, color_type=3,
+                                           bit_depth=bitdepth,
+                                           interlace=interlace)
+                    expected = idx
+                    assert_array_equal(img2, expected)
+
+                    check_iend(file_contents)
 
     def test_write_png_max_chunk_len(self):
         # Create an 8-bit grayscale image.
