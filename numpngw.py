@@ -59,7 +59,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.3.dev7"
+__version__ = "0.0.3.dev8"
 
 
 def _filter0(row, prev_row):
@@ -195,10 +195,12 @@ def _create_stream(a, filter_type=None):
                                 for fr in filtered_rows])
             ftype = values.argmin()
             # Create the string, with the filter type prepended.
-            lines.append(chr(ftype) + filtered_rows[ftype].tostring())
+            lines.append(chr(ftype).encode('ascii') +
+                         filtered_rows[ftype].tostring())
         else:
             filtered_row = filters[filter_type](row_be, prev_row)
-            lines.append(chr(filter_type) + filtered_row.tostring())
+            lines.append(chr(filter_type).encode('ascii') +
+                         filtered_row.tostring())
         prev_row = row_be
     stream = b''.join(lines)
     return stream
@@ -353,7 +355,7 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
 
     zstream = None
     for filter_type in filter_types:
-        stream = ''
+        stream = b''
         for a in passes:
             if a.size > 0:
                 stream += _create_stream(a, filter_type=filter_type)
@@ -573,7 +575,7 @@ def _add_background_color(background, palette, trans, bitdepth):
     index = _np.where((palette == background).all(axis=-1))[0]
     if index.size > 0:
         # The given background color is in the palette.
-        background = index
+        background = index[0]
     else:
         # The given background color is *not* in the palette.  Is there
         # room for one more color?
@@ -595,6 +597,7 @@ def _add_background_color(background, palette, trans, bitdepth):
             if trans is not None:
                 trans = _np.append(trans, [_np.uint8(255)])
             background = index
+
     return background, palette, trans
 
 

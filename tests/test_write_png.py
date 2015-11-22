@@ -253,7 +253,7 @@ def stream_to_array(stream, width, height, color_type, bit_depth, interlace=0):
             bytes_per_pixel = bytes_per_channel * nchannels[color_type]
             data_bytes_per_line = bytes_per_pixel * pass_width
 
-        data_width = data_bytes_per_line / bytes_per_pixel
+        data_width = data_bytes_per_line // bytes_per_pixel
 
         pass_end_index = (pass_start_index +
                           pass_height * (data_bytes_per_line + 1))
