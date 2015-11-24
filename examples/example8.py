@@ -22,6 +22,7 @@ data = np.exp(1j*theta).view(np.float64).reshape(-1, 2).T
 lineplot, = ax.plot([], [], 'c-', linewidth=3)
 
 ani = animation.FuncAnimation(fig, update_line, frames=num_frames,
+                              init_func=lambda : None,
                               fargs=(data, lineplot))
 writer = AnimatedPNGWriter(fps=2)
 ani.save('example8.png', dpi=50, writer=writer)
