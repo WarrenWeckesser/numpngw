@@ -1258,7 +1258,6 @@ class AnimatedPNGWriter(object):
         self._prev_frame = None
 
     def grab_frame(self, **savefig_kwargs):
-        print("grab_frame")
         img_io = _BytesIO()
         self.fig.savefig(img_io, format='rgba', dpi=self.dpi, **savefig_kwargs)
         raw = img_io.getvalue()
