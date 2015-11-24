@@ -51,6 +51,7 @@ from __future__ import (division as _division,
 
 import contextlib as _contextlib
 from io import BytesIO as _BytesIO
+import time as _time
 import struct as _struct
 import zlib as _zlib
 from fractions import Fraction as _Fraction
@@ -59,7 +60,13 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.3.dev8"
+__version__ = "0.0.3.dev9"
+
+
+def _software_text():
+    software = (r"numpngw (version %s), "
+                "https://github.com/WarrenWeckesser/numpngw" % __version__)
+    return software
 
 
 def _filter0(row, prev_row):
@@ -389,8 +396,18 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
 
 def _validate_text(text_list):
     if text_list is None:
-        return
+        text_list = []
+    creation_time = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+    keywords = [keyword for keyword, text in text_list]
+    if "Creation Time" not in keywords:
+        text_list.append(("Creation Time", creation_time))
+    if "Software" not in keywords:
+        text_list.append(("Software", _software_text()))
+    validated_text_list = []
     for keyword, text_string in text_list:
+        if text_string is None:
+            # Drop elements where the text string is None.
+            continue
         if not (0 < len(keyword) < 80):
             raise ValueError("length of keyword must greater than 0 and less "
                              "than 80.")
@@ -401,6 +418,8 @@ def _validate_text(text_list):
         if not kw_check:
             raise ValueError("keyword %r contains non-printable characters." %
                              (keyword,))
+        validated_text_list.append((keyword, text_string))
+    return validated_text_list
 
 
 def _palettize(a):
@@ -722,7 +741,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
     _validate_array(a)
 
-    _validate_text(text_list)
+    text_list = _validate_text(text_list)
 
     timestamp = _validate_timestamp(timestamp)
 
@@ -1034,7 +1053,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                              "and `offset`, which is (%i,  %i)" %
                              (default_image.shape[:2] + (height, width)))
 
-    _validate_text(text_list)
+    text_list = _validate_text(text_list)
 
     timestamp = _validate_timestamp(timestamp)
 
@@ -1239,6 +1258,7 @@ class AnimatedPNGWriter(object):
         self._prev_frame = None
 
     def grab_frame(self, **savefig_kwargs):
+        print("grab_frame")
         img_io = _BytesIO()
         self.fig.savefig(img_io, format='rgba', dpi=self.dpi, **savefig_kwargs)
         raw = img_io.getvalue()

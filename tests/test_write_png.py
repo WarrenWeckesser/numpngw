@@ -87,6 +87,18 @@ def check_bkgd(file_contents, color, color_type, palette=None):
     return file_contents
 
 
+def check_text(file_contents, keyword, text_string=None):
+    # If text_string is None, this code just checks the keyword.
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"tEXt")
+    assert_(b'\x00' in chunk_data)
+    key, text = chunk_data.split(b'\x00', 1)
+    assert_equal(key, keyword)
+    if text_string is not None:
+        assert_equal(text, text_string)
+    return file_contents
+
+
 def check_idat(file_contents, color_type, bit_depth, interlace, img,
                palette=None):
     # This function assumes the entire image is in the chunk.
@@ -423,6 +435,12 @@ class TestWritePng(unittest.TestCase):
                                                    color_type=0,
                                                    interlace=interlace)
 
+                        file_contents = check_text(file_contents,
+                                                   "Creation Time")
+                        file_contents = check_text(file_contents,
+                                                   "Software",
+                                                   numpngw._software_text())
+
                         if transparent is not None:
                             file_contents = check_trns(file_contents,
                                                        color_type=0,
@@ -464,6 +482,12 @@ class TestWritePng(unittest.TestCase):
                                                    color_type=color_type,
                                                    interlace=interlace)
 
+                        file_contents = check_text(file_contents,
+                                                   "Creation Time")
+                        file_contents = check_text(file_contents,
+                                                   "Software",
+                                                   numpngw._software_text())
+
                         file_contents = check_idat(file_contents,
                                                    color_type=color_type,
                                                    bit_depth=bit_depth,
@@ -504,6 +528,12 @@ class TestWritePng(unittest.TestCase):
                                                    color_type=2,
                                                    interlace=interlace)
 
+                        file_contents = check_text(file_contents,
+                                                   "Creation Time")
+                        file_contents = check_text(file_contents,
+                                                   "Software",
+                                                   numpngw._software_text())
+
                         if transparent:
                             file_contents = check_trns(file_contents,
                                                        color_type=2,
@@ -543,6 +573,11 @@ class TestWritePng(unittest.TestCase):
                                                bit_depth=bitdepth,
                                                color_type=3,
                                                interlace=interlace)
+
+                    file_contents = check_text(file_contents, "Creation Time")
+                    file_contents = check_text(file_contents,
+                                               "Software",
+                                               numpngw._software_text())
 
                     # Check the PLTE chunk.
                     chunk_type, chunk_data, file_contents = \
@@ -591,6 +626,10 @@ class TestWritePng(unittest.TestCase):
                                    width=w, height=h,
                                    bit_depth=8, color_type=0, interlace=0)
 
+        file_contents = check_text(file_contents, "Creation Time")
+        file_contents = check_text(file_contents,
+                                   "Software", numpngw._software_text())
+
         zstream = b''
         while True:
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
@@ -628,6 +667,10 @@ class TestWritePng(unittest.TestCase):
                                    width=img.shape[1], height=img.shape[0],
                                    bit_depth=8, color_type=0, interlace=0)
 
+        file_contents = check_text(file_contents, "Creation Time")
+        file_contents = check_text(file_contents,
+                                   "Software", numpngw._software_text())
+
         file_contents = check_time(file_contents, timestamp)
 
         file_contents = check_gama(file_contents, gamma)
@@ -658,6 +701,10 @@ class TestWritePng(unittest.TestCase):
             file_contents = check_ihdr(file_contents, width=w, height=h,
                                        bit_depth=bit_depth, color_type=2,
                                        interlace=0)
+
+            file_contents = check_text(file_contents, "Creation Time")
+            file_contents = check_text(file_contents,
+                                       "Software", numpngw._software_text())
 
             file_contents = check_bkgd(file_contents, color=bg, color_type=2)
 
@@ -693,6 +740,10 @@ class TestWritePng(unittest.TestCase):
                                        bit_depth=bit_depth, color_type=3,
                                        interlace=0)
 
+            file_contents = check_text(file_contents, "Creation Time")
+            file_contents = check_text(file_contents,
+                                       "Software", numpngw._software_text())
+
             # Check the PLTE chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
             self.assertEqual(chunk_type, b"PLTE")
@@ -718,6 +769,33 @@ class TestWritePng(unittest.TestCase):
 
             check_iend(file_contents)
 
+    def test_text(self):
+        img = np.arange(15).reshape(3, 5).astype(np.uint8)
+        text_list = [('Monster', 'Godzilla'), ('Creation Time', None)]
+
+        f = io.BytesIO()
+        numpngw.write_png(f, img, filter_type=0, text_list=text_list)
+
+        file_contents = f.getvalue()
+
+        file_contents = check_signature(file_contents)
+
+        file_contents = check_ihdr(file_contents,
+                                   width=img.shape[1],
+                                   height=img.shape[0],
+                                   bit_depth=8, color_type=0,
+                                   interlace=0)
+
+        file_contents = check_text(file_contents, "Monster", "Godzilla")
+        file_contents = check_text(file_contents,
+                                   "Software", numpngw._software_text())
+
+        file_contents = check_idat(file_contents, color_type=0,
+                                   bit_depth=8, interlace=0,
+                                   img=img)
+
+        check_iend(file_contents)
+
 
 class TestWritePngFilterType(unittest.TestCase):
 
@@ -740,6 +818,10 @@ class TestWritePngFilterType(unittest.TestCase):
                                    height=img.shape[0],
                                    bit_depth=bitdepth, color_type=0,
                                    interlace=0)
+
+        file_contents = check_text(file_contents, "Creation Time")
+        file_contents = check_text(file_contents,
+                                   "Software", numpngw._software_text())
 
         file_contents = check_idat(file_contents, color_type=0,
                                    bit_depth=bitdepth, interlace=0,
@@ -766,6 +848,10 @@ class TestWriteApng(unittest.TestCase):
 
         file_contents = check_ihdr(file_contents, width=w, height=h,
                                    bit_depth=8, color_type=6, interlace=0)
+
+        file_contents = check_text(file_contents, "Creation Time")
+        file_contents = check_text(file_contents,
+                                   "Software", numpngw._software_text())
 
         file_contents = check_actl(file_contents, num_frames=num_frames,
                                    num_plays=0)
@@ -820,6 +906,10 @@ class TestWriteApng(unittest.TestCase):
 
         file_contents = check_ihdr(file_contents, width=w, height=h,
                                    bit_depth=8, color_type=6, interlace=0)
+
+        file_contents = check_text(file_contents, "Creation Time")
+        file_contents = check_text(file_contents,
+                                   "Software", numpngw._software_text())
 
         file_contents = check_actl(file_contents, num_frames=num_frames,
                                    num_plays=0)
