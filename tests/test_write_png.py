@@ -5,7 +5,8 @@ import io
 import struct
 import zlib
 import numpy as np
-from numpy.testing import assert_, assert_equal, assert_array_equal
+from numpy.testing import (assert_, assert_equal, assert_array_equal,
+                           assert_raises)
 import numpngw
 
 
@@ -436,10 +437,10 @@ class TestWritePng(unittest.TestCase):
                                                    interlace=interlace)
 
                         file_contents = check_text(file_contents,
-                                                   "Creation Time")
-                        file_contents = check_text(file_contents,
-                                                   "Software",
-                                                   numpngw._software_text())
+                                                   b"Creation Time")
+                        software = numpngw._software_text().encode('latin-1')
+                        file_contents = check_text(file_contents, b"Software",
+                                                   software)
 
                         if transparent is not None:
                             file_contents = check_trns(file_contents,
@@ -483,10 +484,10 @@ class TestWritePng(unittest.TestCase):
                                                    interlace=interlace)
 
                         file_contents = check_text(file_contents,
-                                                   "Creation Time")
-                        file_contents = check_text(file_contents,
-                                                   "Software",
-                                                   numpngw._software_text())
+                                                   b"Creation Time")
+                        software = numpngw._software_text().encode('latin-1')
+                        file_contents = check_text(file_contents, b"Software",
+                                                   software)
 
                         file_contents = check_idat(file_contents,
                                                    color_type=color_type,
@@ -529,10 +530,10 @@ class TestWritePng(unittest.TestCase):
                                                    interlace=interlace)
 
                         file_contents = check_text(file_contents,
-                                                   "Creation Time")
-                        file_contents = check_text(file_contents,
-                                                   "Software",
-                                                   numpngw._software_text())
+                                                   b"Creation Time")
+                        software = numpngw._software_text().encode('latin-1')
+                        file_contents = check_text(file_contents, b"Software",
+                                                   software)
 
                         if transparent:
                             file_contents = check_trns(file_contents,
@@ -574,16 +575,17 @@ class TestWritePng(unittest.TestCase):
                                                color_type=3,
                                                interlace=interlace)
 
-                    file_contents = check_text(file_contents, "Creation Time")
-                    file_contents = check_text(file_contents,
-                                               "Software",
-                                               numpngw._software_text())
+                    file_contents = check_text(file_contents, b"Creation Time")
+                    software = numpngw._software_text().encode('latin-1')
+                    file_contents = check_text(file_contents, b"Software",
+                                               software)
 
                     # Check the PLTE chunk.
                     chunk_type, chunk_data, file_contents = \
                         next_chunk(file_contents)
                     self.assertEqual(chunk_type, b"PLTE")
-                    p = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
+                    p = np.fromstring(chunk_data,
+                                      dtype=np.uint8).reshape(-1, 3)
                     n = ncolors*3
                     expected = np.arange(n, dtype=np.uint8).reshape(-1, 3)
                     assert_array_equal(p, expected)
@@ -626,9 +628,9 @@ class TestWritePng(unittest.TestCase):
                                    width=w, height=h,
                                    bit_depth=8, color_type=0, interlace=0)
 
-        file_contents = check_text(file_contents, "Creation Time")
-        file_contents = check_text(file_contents,
-                                   "Software", numpngw._software_text())
+        file_contents = check_text(file_contents, b"Creation Time")
+        file_contents = check_text(file_contents, b"Software",
+                                   numpngw._software_text().encode('latin-1'))
 
         zstream = b''
         while True:
@@ -667,9 +669,9 @@ class TestWritePng(unittest.TestCase):
                                    width=img.shape[1], height=img.shape[0],
                                    bit_depth=8, color_type=0, interlace=0)
 
-        file_contents = check_text(file_contents, "Creation Time")
-        file_contents = check_text(file_contents,
-                                   "Software", numpngw._software_text())
+        file_contents = check_text(file_contents, b"Creation Time")
+        file_contents = check_text(file_contents, b"Software",
+                                   numpngw._software_text().encode('latin-1'))
 
         file_contents = check_time(file_contents, timestamp)
 
@@ -702,9 +704,10 @@ class TestWritePng(unittest.TestCase):
                                        bit_depth=bit_depth, color_type=2,
                                        interlace=0)
 
-            file_contents = check_text(file_contents, "Creation Time")
-            file_contents = check_text(file_contents,
-                                       "Software", numpngw._software_text())
+            file_contents = check_text(file_contents, b"Creation Time")
+            software = numpngw._software_text().encode('latin-1')
+            file_contents = check_text(file_contents, b"Software",
+                                       software)
 
             file_contents = check_bkgd(file_contents, color=bg, color_type=2)
 
@@ -740,9 +743,10 @@ class TestWritePng(unittest.TestCase):
                                        bit_depth=bit_depth, color_type=3,
                                        interlace=0)
 
-            file_contents = check_text(file_contents, "Creation Time")
-            file_contents = check_text(file_contents,
-                                       "Software", numpngw._software_text())
+            file_contents = check_text(file_contents, b"Creation Time")
+            software = numpngw._software_text().encode('latin-1')
+            file_contents = check_text(file_contents, b"Software",
+                                       software)
 
             # Check the PLTE chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
@@ -786,15 +790,69 @@ class TestWritePng(unittest.TestCase):
                                    bit_depth=8, color_type=0,
                                    interlace=0)
 
-        file_contents = check_text(file_contents, "Monster", "Godzilla")
-        file_contents = check_text(file_contents,
-                                   "Software", numpngw._software_text())
+        file_contents = check_text(file_contents, b"Monster", b"Godzilla")
+        file_contents = check_text(file_contents, b"Software",
+                                   numpngw._software_text().encode('latin-1'))
 
         file_contents = check_idat(file_contents, color_type=0,
                                    bit_depth=8, interlace=0,
                                    img=img)
 
         check_iend(file_contents)
+
+    def test_bad_text_keyword(self):
+        img = np.zeros((5, 10), dtype=np.uint8)
+
+        f = io.BytesIO()
+
+        # keyword too long
+        bad_keyword = "X"*90
+        text_list = [(bad_keyword, "foo")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # keyword starts with a space
+        bad_keyword = " ABC"
+        text_list = [(bad_keyword, "foo")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # keyword ends with a space
+        bad_keyword = "ABC "
+        text_list = [(bad_keyword, "foo")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # keyword contains consecutive spaces
+        bad_keyword = "A  BC"
+        text_list = [(bad_keyword, "foo")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # keyword contains a nonprintable character (nonbreaking space,
+        # in this case)
+        bad_keyword = "ABC\xA0XYZ"
+        text_list = [(bad_keyword, "foo")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # keyword cannot be encoded as latin-1
+        bad_keyword = "ABC\u1234XYZ"
+        text_list = [(bad_keyword, "foo")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # text string contains the null character
+        bad_keyword = "ABC"
+        text_list = [(bad_keyword, "foo\0bar")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
+
+        # text string cannot be encoded as latin-1
+        bad_keyword = "ABC"
+        text_list = [(bad_keyword, "foo\u1234bar")]
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(text_list=text_list))
 
 
 class TestWritePngFilterType(unittest.TestCase):
@@ -819,9 +877,9 @@ class TestWritePngFilterType(unittest.TestCase):
                                    bit_depth=bitdepth, color_type=0,
                                    interlace=0)
 
-        file_contents = check_text(file_contents, "Creation Time")
-        file_contents = check_text(file_contents,
-                                   "Software", numpngw._software_text())
+        file_contents = check_text(file_contents, b"Creation Time")
+        file_contents = check_text(file_contents, b"Software",
+                                   numpngw._software_text().encode('latin-1'))
 
         file_contents = check_idat(file_contents, color_type=0,
                                    bit_depth=bitdepth, interlace=0,
@@ -849,9 +907,9 @@ class TestWriteApng(unittest.TestCase):
         file_contents = check_ihdr(file_contents, width=w, height=h,
                                    bit_depth=8, color_type=6, interlace=0)
 
-        file_contents = check_text(file_contents, "Creation Time")
-        file_contents = check_text(file_contents,
-                                   "Software", numpngw._software_text())
+        file_contents = check_text(file_contents, b"Creation Time")
+        file_contents = check_text(file_contents, b"Software",
+                                   numpngw._software_text().encode('latin-1'))
 
         file_contents = check_actl(file_contents, num_frames=num_frames,
                                    num_plays=0)
@@ -907,9 +965,9 @@ class TestWriteApng(unittest.TestCase):
         file_contents = check_ihdr(file_contents, width=w, height=h,
                                    bit_depth=8, color_type=6, interlace=0)
 
-        file_contents = check_text(file_contents, "Creation Time")
-        file_contents = check_text(file_contents,
-                                   "Software", numpngw._software_text())
+        file_contents = check_text(file_contents, b"Creation Time")
+        file_contents = check_text(file_contents, b"Software",
+                                   numpngw._software_text().encode('latin-1'))
 
         file_contents = check_actl(file_contents, num_frames=num_frames,
                                    num_plays=0)

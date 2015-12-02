@@ -49,6 +49,7 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import (division as _division,
                         print_function as _print_function)
 
+import sys as _sys
 import contextlib as _contextlib
 from io import BytesIO as _BytesIO
 import time as _time
@@ -60,11 +61,18 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.3.dev9"
+__version__ = "0.0.3.dev10"
+
+_PY3 = _sys.version_info > (3,)
+if _PY3:
+    def _bord(c):
+        return c
+else:
+    _bord = ord
 
 
 def _software_text():
-    software = (r"numpngw (version %s), "
+    software = ("numpngw (version %s), "
                 "https://github.com/WarrenWeckesser/numpngw" % __version__)
     return software
 
@@ -235,10 +243,10 @@ def _write_ihdr(f, width, height, nbits, color_type, interlace):
 def _write_text(f, keyword, text_string):
     """Write a tEXt chunk to `f`.
 
-    keyword and test_string are expected to be strings (not bytes).
-    The function encodes them as ASCII before writing to the file.
+    keyword and test_string are expected to be bytes (not unicode).
+    They must already be validated.
     """
-    data = keyword.encode('ascii') + b'\0' + text_string.encode('ascii')
+    data = keyword + b'\0' + text_string
     _write_chunk(f, b'tEXt', data)
 
 
@@ -394,31 +402,62 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
     return num_data_chunks
 
 
+def _encode_latin1(s):
+    if _PY3:
+        unicode_type = str
+    else:
+        unicode_type = unicode
+    if isinstance(s, unicode_type):
+        s = s.encode('latin-1')
+    return s
+
+
 def _validate_text(text_list):
     if text_list is None:
         text_list = []
-    creation_time = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+
+    creation_time = _encode_latin1(_time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                                  _time.gmtime()))
+    software = _encode_latin1(_software_text())
+
+    text_list = [(_encode_latin1(keyword), _encode_latin1(text))
+                 for keyword, text in text_list]
+
     keywords = [keyword for keyword, text in text_list]
-    if "Creation Time" not in keywords:
-        text_list.append(("Creation Time", creation_time))
-    if "Software" not in keywords:
-        text_list.append(("Software", _software_text()))
+    if b"Creation Time" not in keywords:
+        text_list.append((b"Creation Time", creation_time))
+    if b"Software" not in keywords:
+        text_list.append((b"Software", software))
+
     validated_text_list = []
     for keyword, text_string in text_list:
         if text_string is None:
             # Drop elements where the text string is None.
             continue
+
+        # Validate the keyword.
         if not (0 < len(keyword) < 80):
             raise ValueError("length of keyword must greater than 0 and less "
                              "than 80.")
-        if '\0' in text_string:
-            raise ValueError("text_string contains a null character.")
-        kw_check = all([(31 < ord(c) < 127) or (160 < ord(c) < 256)
+        kw_check = all([(31 < _bord(c) < 127) or (160 < _bord(c) < 256)
                         for c in keyword])
         if not kw_check:
             raise ValueError("keyword %r contains non-printable characters." %
                              (keyword,))
+        if keyword.startswith(b' '):
+            raise ValueError("keyword %r begins with a space." % (keyword,))
+        if keyword.endswith(b' '):
+            raise ValueError("keyword %r ends with a space." % (keyword,))
+        if b'  ' in keyword:
+            raise ValueError("keyword %r contains consecutive spaces." %
+                             (keyword,))
+
+        # Validate the text string.
+        if b'\0' in text_string:
+            raise ValueError("text_string contains a null character.")
+
         validated_text_list.append((keyword, text_string))
+
     return validated_text_list
 
 
