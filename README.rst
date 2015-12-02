@@ -31,6 +31,11 @@ take a look at:
 * pypng (https://pypi.python.org/pypi/pypng) or
 * imageio (https://pypi.python.org/pypi/imageio).
 
+The following examples show some PNG and animated PNG files created with
+numpy and numpngw.  To see the animations in Examples 5 - 8, you must view
+this file with a browser that supports animated PNG files.  Currently (as
+of the writing of this file),  Firefox supports animated PNG, Safari does
+not, and Chrome requires an extension.
 
 Example 1
 ---------
@@ -174,16 +179,17 @@ The script::
 Example 5
 ---------
 
-This animated PNG file is created by the following script.
-As in the other examples, most of script is code that generates
-the data to be saved.  The line that creates the PNG file is
-simply::
-
-    write_apng("example5.png", seq, delay=50, use_palette=True)
+This animated PNG
 
 .. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example5.png
    :alt: Example 5
    :align: center
+
+is created by the following script.  As in the other examples, most
+of script is code that generates the data to be saved.  The line that
+creates the PNG file is simply::
+
+    write_apng("example5.png", seq, delay=50, use_palette=True)
 
 The script::
 
