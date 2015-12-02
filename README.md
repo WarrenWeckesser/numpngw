@@ -16,8 +16,12 @@ Capabilities of `write_png` include:
 * automatic creation of a palette for an indexed PNG file;
 * inclusion of `tEXt`, `tIME`, `bKGD` and `gAMA` chunks.
 
-This is prototype-quality software.  The documentation is sparse, and the API
-will likely change.
+The package is written in pure python.  The only external dependencies
+are numpy and setuptools.
+
+The package has a suite of unit tests, but it should still be considered
+prototype-quality software.  There may be backwards-incompatible API changes
+between releases.
 
 This software is released under the BSD 2-clause license.
 
