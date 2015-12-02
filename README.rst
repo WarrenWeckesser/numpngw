@@ -1,20 +1,20 @@
 numpngw
 =======
 
-This python package defines the function `write_png` that writes a
-numpy array to a PNG file, and the function `write_apng` that writes
+This python package defines the function ``write_png`` that writes a
+numpy array to a PNG file, and the function ``write_apng`` that writes
 a sequence of arrays to an animated PNG (APNG) file.  Also included
-is the class `AnimatedPNGWriter` that can be used to save a Matplotlib
+is the class ``AnimatedPNGWriter`` that can be used to save a Matplotlib
 animation as an animated PNG file; see Example 8 for an example.
 
-Capabilities of `write_png` include:
+Capabilities of ``write_png`` include:
 
 * creation of 8-bit and 16-bit RGB files;
 * creation of 1-bit, 2-bit, 4-bit, 8-bit and 16-bit grayscale files;
 * creation of RGB and grayscale images with an alpha channel;
 * setting a transparent color;
 * automatic creation of a palette for an indexed PNG file;
-* inclusion of `tEXt`, `tIME`, `bKGD` and `gAMA` chunks.
+* inclusion of ``tEXt``, ``tIME``, ``bKGD`` and ``gAMA`` chunks.
 
 The package is written in pure python.  The only external dependencies
 are numpy and setuptools.
@@ -28,8 +28,8 @@ This software is released under the BSD 2-clause license.
 For packages with more features (including functions for *reading* PNG files),
 take a look at:
 
-* `pypng` (https://pypi.python.org/pypi/pypng) or
-* `imageio` (https://pypi.python.org/pypi/imageio).
+* pypng (https://pypi.python.org/pypi/pypng) or
+* imageio (https://pypi.python.org/pypi/imageio).
 
 
 Example 1
@@ -138,7 +138,7 @@ The script::
 Example 4
 ---------
 
-The following script uses the option `use_palette=True` to create this 8-bit
+The following script uses the option ``use_palette=True`` to create this 8-bit
 indexed RGB file.
 
 .. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example4.png
@@ -211,9 +211,9 @@ The script::
 Example 6
 ---------
 
-Another animated RGB PNG. In this example, the argument `seq`
-that is passed to `write_apng` is a numpy array with shape
-`(num_frames, height, width, 3)`.
+Another animated RGB PNG. In this example, the argument ``seq``
+that is passed to ``write_apng`` is a numpy array with shape
+``(num_frames, height, width, 3)``.
 
 .. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example6.png
    :alt: Example 6
