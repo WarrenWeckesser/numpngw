@@ -37,7 +37,9 @@ Example 1
 
 The following script creates this PNG file, an 8-bit RGB image.
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example1.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example1.png
+   :alt: Example 1
+   :align: center
 
 The script::
 
@@ -67,7 +69,9 @@ Example 2
 
 The following script creates this PNG file, a 1-bit grayscale image.
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example2.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example2.png
+   :alt: Example 2
+   :align: center
 
 The script::
 
@@ -96,7 +100,9 @@ The following script creates this PNG file, a 16-bit RGB file in which
 the value (0, 0, 0) is transparent.  It might not be obvious, but the
 two squares are transparent.
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example3.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example3.png
+   :alt: Example 3
+   :align: center
 
 The script::
 
@@ -135,7 +141,9 @@ Example 4
 The following script uses the option `use_palette=True` to create this 8-bit
 indexed RGB file.
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example4.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example4.png
+   :alt: Example 4
+   :align: center
 
 The script::
 
@@ -169,11 +177,13 @@ Example 5
 This animated PNG file is created by the following script.
 As in the other examples, most of script is code that generates
 the data to be saved.  The line that creates the PNG file is
-simply
+simply::
 
     write_apng("example5.png", seq, delay=50, use_palette=True)
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example5.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example5.png
+   :alt: Example 5
+   :align: center
 
 The script::
 
@@ -205,7 +215,9 @@ Another animated RGB PNG. In this example, the argument `seq`
 that is passed to `write_apng` is a numpy array with shape
 `(num_frames, height, width, 3)`.
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example6.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example6.png
+   :alt: Example 6
+   :align: center
 
 The script::
 
@@ -244,7 +256,9 @@ Example 7
 
 Create an animated PNG with different display times for each frame.
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example7.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example7.png
+   :alt: Example 7
+   :align: center
 
 The script::
 
@@ -374,7 +388,9 @@ This example shows how a Matplotlib animation can be saved as
 an animated PNG file with `numpngw.AnimatedPNGWriter`.  (Be careful
 with this class--it can easily create very large PNG files.)
 
-![](https://github.com/WarrenWeckesser/numpngw/blob/master/examples/example8.png)
+.. image:: https://raw.githubusercontent.com/WarrenWeckesser/numpngw/master/examples/example8.png
+   :alt: Example 8
+   :align: center
 
 The script::
 
