@@ -293,6 +293,12 @@ def _write_bkgd(f, color, color_type):
     _write_chunk(f, b"bKGD", chunk_data)
 
 
+def _write_phys(f, phys):
+    """Write a pHYs chunk to `f`."""
+    chunk_data = _struct.pack("!IIB", *phys)
+    _write_chunk(f, b"pHYs", chunk_data)
+
+
 def _write_idat(f, data):
     """Write an IDAT chunk to `f`."""
     _write_chunk(f, b"IDAT", data)
@@ -626,6 +632,18 @@ def _validate_timestamp(timestamp):
     return timestamp
 
 
+def _validate_phys(phys):
+    if phys is not None:
+        if len(phys) == 2:
+            phys = tuple(phys) + (0,)
+        elif phys[2] not in [0, 1]:
+            raise ValueError('Third element of `phys` must be 0 or 1.')
+        phys = [int(x) for x in phys]
+        if phys[0] <= 0 or phys[1] <= 0:
+            raise ValueError('The pixels per unit in `phys` must be positive.')
+    return phys
+
+
 def _add_background_color(background, palette, trans, bitdepth):
     if len(background) != 3:
         raise ValueError("background must have length 3 when "
@@ -662,7 +680,7 @@ def _add_background_color(background, palette, trans, bitdepth):
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
               timestamp=None, gamma=None, background=None,
-              filter_type=None, interlace=0):
+              filter_type=None, interlace=0, phys=None):
     """
     Write a numpy array to a PNG file.
 
@@ -724,6 +742,15 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         types, and the filter that generates the smallest output is used.
     interlace : either 0 or 1
         Interlace method to use.  0 means no interlace; 1 means Adam7.
+    phys : tuple with length 2 or 3, optional
+        If given, a `pHYs` chunk is written to the PNG file.
+        If `phys` is given, it must be a tuple of integers with length 2
+        or 3.  The first two integers are the pixels per unit of the X
+        and Y axes, respectively.  The third value, if given, must be 0
+        or 1.  If the value is 1, the units of the first two values are
+        pixels per *meter*.  If the third value is 0 (or not given),
+        the units of the first two values are undefined.  In that case,
+        the values define the pixel aspect ratio only.
 
     Notes
     -----
@@ -777,6 +804,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
     if filter_type is None:
         filter_type = "auto"
+
+    phys = _validate_phys(phys)
 
     _validate_array(a)
 
@@ -907,6 +936,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if background is not None:
         _write_bkgd(f, background, color_type)
 
+    # pHYs chunk, if `phys` was given.
+    if phys is not None:
+        _write_phys(f, phys)
+
     # _write_data(...) writes the IDAT chunk(s).
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
                 filter_type=filter_type, interlace=interlace)
@@ -952,7 +985,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
-               background=None, filter_type=None, interlace=0):
+               background=None, filter_type=None, interlace=0, phys=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -1031,6 +1064,15 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         output is used.
     interlace : either 0 or 1
         Interlace method to use.  0 means no interlace; 1 means Adam7.
+    phys : tuple with length 2 or 3, optional
+        If given, a `pHYs` chunk is written to the PNG file.
+        If `phys` is given, it must be a tuple of integers with length 2
+        or 3.  The first two integers are the pixels per unit of the X
+        and Y axes, respectively.  The third value, if given, must be 0
+        or 1.  If the value is 1, the units of the first two values are
+        pixels per *meter*.  If the third value is 0 (or not given),
+        the units of the first two values are undefined.  In that case,
+        the values define the pixel aspect ratio only.
 
     Notes
     -----
@@ -1093,6 +1135,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                              (default_image.shape[:2] + (height, width)))
 
     text_list = _validate_text(text_list)
+
+    phys = _validate_phys(phys)
 
     timestamp = _validate_timestamp(timestamp)
 
@@ -1191,6 +1235,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     # bKGD chunk, if there is one.
     if background is not None:
         _write_bkgd(f, background, color_type)
+
+    # pHYs chunk, if `phys` was given.
+    if phys is not None:
+        _write_phys(f, phys)
 
     # acTL chunk
     _write_actl(f, num_frames, num_plays)

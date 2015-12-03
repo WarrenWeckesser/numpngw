@@ -88,6 +88,14 @@ def check_bkgd(file_contents, color, color_type, palette=None):
     return file_contents
 
 
+def check_phys(file_contents, phys):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"pHYs")
+    xppu, yppu, unit = struct.unpack("!IIB", chunk_data)
+    assert_equal((xppu, yppu, unit), phys)
+    return file_contents
+
+
 def check_text(file_contents, keyword, text_string=None):
     # If text_string is None, this code just checks the keyword.
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
@@ -773,12 +781,14 @@ class TestWritePng(unittest.TestCase):
 
             check_iend(file_contents)
 
-    def test_text(self):
+    def test_text_and_phys(self):
         img = np.arange(15).reshape(3, 5).astype(np.uint8)
         text_list = [('Monster', 'Godzilla'), ('Creation Time', None)]
+        phys = (5, 4, 0)
 
         f = io.BytesIO()
-        numpngw.write_png(f, img, filter_type=0, text_list=text_list)
+        numpngw.write_png(f, img, filter_type=0, text_list=text_list,
+                          phys=phys)
 
         file_contents = f.getvalue()
 
@@ -793,6 +803,8 @@ class TestWritePng(unittest.TestCase):
         file_contents = check_text(file_contents, b"Monster", b"Godzilla")
         file_contents = check_text(file_contents, b"Software",
                                    numpngw._software_text().encode('latin-1'))
+
+        file_contents = check_phys(file_contents, phys)
 
         file_contents = check_idat(file_contents, color_type=0,
                                    bit_depth=8, interlace=0,
@@ -853,6 +865,26 @@ class TestWritePng(unittest.TestCase):
         text_list = [(bad_keyword, "foo\u1234bar")]
         assert_raises(ValueError, numpngw.write_png, f, img,
                       dict(text_list=text_list))
+
+    def test_bad_phys(self):
+        img = np.zeros((5, 10), dtype=np.uint8)
+
+        f = io.BytesIO()
+
+        # Third value must be 0 or 1.
+        phys = (1, 2, 3)
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(phys=phys))
+
+        # pixel per unit values must be positive.
+        phys = (1, -2, 0)
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(phys=phys))
+
+        # pixel per unit values must be positive.
+        phys = (0, 2, 0)
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      dict(phys=phys))
 
 
 class TestWritePngFilterType(unittest.TestCase):
