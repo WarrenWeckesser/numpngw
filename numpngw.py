@@ -1,23 +1,9 @@
 """
-write_png(...) writes a numpy array to a PNG file.
-write_apng(...) writes a sequence of arrays to an APNG file.
-AnimatedPNGWriter is a class that can be used with Matplotlib animations.
+The numpngw module defines two functions and a class:
 
-This code has no dependencies other than numpy and the python standard
-libraries.
-
-
-Limitations:
-
-* Only tested with Python 2.7 and 3.4 (but it definitely requires
-  at least python 2.6).
-* _write_text requires the text string to be ASCII.  This might
-  be too strong of a requirement.
-* Channel bit depths of 1, 2, or 4 are supported for input arrays
-  with dtype np.uint8, but this could be made more flexible.
-  Only color_type 0 allows smaller bit depths.
-* The values in the input array(s) are assumed to be within the
-  range of the given bit depth.  Higher bits are ignored.
+* write_png(...) writes a numpy array to a PNG file.
+* write_apng(...) writes a sequence of arrays to an animated PNG file.
+* AnimatedPNGWriter is a class that can be used with Matplotlib animations.
 
 -----
 Copyright (c) 2015, Warren Weckesser
@@ -1320,12 +1306,12 @@ def _finddiff(img1, img2):
 
 class AnimatedPNGWriter(object):
     """
-    This class implements the interface required by a matplotlib
-    `MovieWriter`.  An instance of this class may be used as the
-    `writer` argument of `Animation.save()`.
+    This class implements the interface required by the matplotlib class
+    `matplotlib.animation.MovieWriter`.  An instance of this class may be
+    used as the `writer` argument of `matplotlib.animation.Animation.save()`.
 
-    This class is experimental.  It will likely change without
-    warning in the next release.
+    This class is experimental.  It may change without warning in the next
+    release.
     """
 
     # I haven't tried to determine all the additional arguments that
