@@ -35,7 +35,7 @@ The following examples show some PNG and animated PNG files created with
 numpy and numpngw.  To see the animations in Examples 5 - 8, you must view
 this file with a browser that supports animated PNG files.  Currently (as
 of the writing of this file),  Firefox supports animated PNG, Safari does
-not, and Chrome requires an extension.
+not, and Chrome and Opera require an extension.
 
 Example 1
 ---------
