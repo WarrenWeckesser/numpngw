@@ -20,7 +20,7 @@ def get_numpngw_version():
                 return s[1][1:-1]
 
 
-# Get the long description from README.md.
+# Get the long description from README.rst.
 _here = path.abspath(path.dirname(__file__))
 with open(path.join(_here, 'README.rst')) as f:
     _long_description = f.read()
