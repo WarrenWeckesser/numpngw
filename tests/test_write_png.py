@@ -5,6 +5,10 @@ import io
 import struct
 import zlib
 import numpy as np
+try:
+    import nose
+except ImportError:
+    raise ImportError("The 'nose' package must be installed to run the tests.")
 from numpy.testing import (assert_, assert_equal, assert_array_equal,
                            assert_raises)
 import numpngw
