@@ -1155,7 +1155,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
             # palette, extend the palette with the new color (or raise an
             # error if there are already 256 colors).
             background, palette, trans = _add_background_color(background,
-                                                               palette, trans)
+                                                               palette, trans,
+                                                               bitdepth)
 
         if trans is None and transparent is not None:
             # The array does not have an alpha channel.  The caller has given

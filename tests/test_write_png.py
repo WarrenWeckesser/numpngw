@@ -1031,6 +1031,71 @@ class TestWriteApng(unittest.TestCase):
 
         check_iend(file_contents)
 
+    def test_write_apng_bkgd(self):
+        # Test creation of RGB images (color type 2), with a background color.
+        w = 16
+        h = 8
+        np.random.seed(123)
+        num_frames = 3
+        for bit_depth in [8, 16]:
+            maxval = 2**bit_depth
+            bg = (maxval - 1, maxval - 2, maxval - 3)
+            dt = np.uint16 if bit_depth == 16 else np.uint8
+            seq = np.random.randint(0, maxval,
+                                    size=(num_frames, h, w, 3)).astype(dt)
+
+            f = io.BytesIO()
+            numpngw.write_apng(f, seq, background=bg, filter_type=0)
+
+            file_contents = f.getvalue()
+
+            file_contents = check_signature(file_contents)
+
+            file_contents = check_ihdr(file_contents, width=w, height=h,
+                                       bit_depth=bit_depth, color_type=2,
+                                       interlace=0)
+
+            file_contents = check_text(file_contents, b"Creation Time")
+            software = numpngw._software_text().encode('latin-1')
+            file_contents = check_text(file_contents, b"Software",
+                                       software)
+
+            file_contents = check_bkgd(file_contents, color=bg, color_type=2)
+
+            file_contents = check_actl(file_contents, num_frames=num_frames,
+                                       num_plays=0)
+
+            sequence_number = 0
+            file_contents = check_fctl(file_contents,
+                                       sequence_number=sequence_number,
+                                       width=w, height=h)
+            sequence_number += 1
+
+            file_contents = check_idat(file_contents, color_type=2,
+                                       bit_depth=bit_depth,
+                                       interlace=0, img=seq[0])
+
+            for k in range(1, num_frames):
+                file_contents = check_fctl(file_contents,
+                                           sequence_number=sequence_number,
+                                           width=w, height=h)
+                sequence_number += 1
+
+                # Check the fdAT chunk.
+                nxt = next_chunk(file_contents)
+                chunk_type, chunk_data, file_contents = nxt
+                self.assertEqual(chunk_type, b"fdAT")
+                actual_seq_num = struct.unpack("!I", chunk_data[:4])[0]
+                self.assertEqual(actual_seq_num, sequence_number)
+                sequence_number += 1
+                decompressed = zlib.decompress(chunk_data[4:])
+                b = np.fromstring(decompressed, dtype=np.uint8)
+                img2 = stream_to_array(b, w, h, color_type=2,
+                                       bit_depth=bit_depth, interlace=0)
+                assert_array_equal(img2, seq[k])
+
+            check_iend(file_contents)
+
 
 if __name__ == '__main__':
     unittest.main()
