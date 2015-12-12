@@ -185,9 +185,9 @@ This animated PNG
    :alt: Example 5
    :align: center
 
-is created by the following script.  As in the other examples, most
-of script is code that generates the data to be saved.  The line that
-creates the PNG file is simply::
+is created by the following script.  As in the other examples, most of the
+script is code that generates the data to be saved.  The line that creates
+the PNG file is simply::
 
     write_apng("example5.png", seq, delay=50, use_palette=True)
 
