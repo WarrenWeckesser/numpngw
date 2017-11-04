@@ -793,6 +793,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
     phys = _validate_phys(phys)
 
+    a = _np.ascontiguousarray(a)
     _validate_array(a)
 
     text_list = _validate_text(text_list)
@@ -1089,6 +1090,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     # Validate seq
     if type(seq) == _np.ndarray:
         # seq is a single numpy array containing the frames.
+        seq = _np.ascontiguousarray(seq)
         _validate_array(seq[0])
     else:
         # seq is not a numpy array, so it must be a sequence of numpy arrays,
@@ -1097,6 +1099,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
             _validate_array(a)
         if any(a.dtype != seq[0].dtype for a in seq[1:]):
             raise ValueError("all arrays in `seq` must have the same dtype.")
+        seq = [_np.ascontiguousarray(a) for a in seq]
 
     if offset is not None:
         if len(offset) != len(seq):
