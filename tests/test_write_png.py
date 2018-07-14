@@ -890,6 +890,16 @@ class TestWritePng(unittest.TestCase):
         assert_raises(ValueError, numpngw.write_png, f, img,
                       dict(phys=phys))
 
+    def test_too_many_colors_for_palette(self):
+        f = io.BytesIO()
+
+        img = np.zeros((4, 4, 3), dtype=np.uint8)
+        img[0, 0] = 1
+        img[0, 1] = 2
+        # img has 3 unique colors.
+        assert_raises(ValueError, numpngw.write_png, f, img,
+                      use_palette=True, bitdepth=1)
+
 
 class TestWritePngFilterType(unittest.TestCase):
 
@@ -1099,6 +1109,18 @@ class TestWriteApng(unittest.TestCase):
                 assert_array_equal(img2, seq[k])
 
             check_iend(file_contents)
+
+    def test_too_many_colors_for_palette(self):
+        f = io.BytesIO()
+
+        img1 = np.zeros((4, 4, 3), dtype=np.uint8)
+        img1[0, 0] = 1
+        img1[0, 1] = 2
+        img2 = np.zeros_like(img1)
+
+        # [img1, img2] has 3 unique colors.
+        assert_raises(ValueError, numpngw.write_apng, f, [img1, img2],
+                      use_palette=True, bitdepth=1)
 
 
 if __name__ == '__main__':

@@ -839,12 +839,14 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         # into the array `palette`, which contains the colors.  `trans` is
         # either None (if there was no alpha channel), or an array the same
         # length as `palette` containing the alpha values of the colors.
-        max_num_colors = 2**bitdepth if bitdepth is not None else 256
+
+        bd = bitdepth if bitdepth is not None else 8
+        max_num_colors = 2**bd
         if len(palette) > max_num_colors:
-            raise ValueError("The array has %d colors.  With bit depth %i, "
+            raise ValueError("The array has %i colors.  With bit depth %i, "
                              "no more than %i colors are allowed when using "
                              "a palette." %
-                             (len(palette), bitdepth, max_num_colors))
+                             (len(palette), bd, max_num_colors))
 
         if background is not None:
             # A default background color has been given, and we're creating
@@ -1146,10 +1148,15 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         # the arrays hold indices into the array `palette`, which contains
         # the colors.  `trans` is either None (if there was no alpha channel),
         # or an array containing the alpha values of the colors.
-        if len(palette) > 256:
-            raise ValueError("The input has %d colors.  No more than 256 "
-                             "colors are allowed when using a palette." %
-                             len(palette))
+
+        bd = bitdepth if bitdepth is not None else 8
+        max_num_colors = 2**bd
+        if len(palette) > max_num_colors:
+            raise ValueError("The arrays have a total of %i colors. "
+                             "With bit depth %i, no more than %i colors are "
+                             "allowed when using a palette." %
+                             (len(palette), bd, max_num_colors))
+
 
         if background is not None:
             # A default background color has been given, and we're creating
