@@ -64,7 +64,7 @@ def check_trns(file_contents, color_type, transparent, palette=None):
         assert_equal(trns, transparent)
     elif color_type == 3:
         # alphas for the first len(chunk_data) palette indices.
-        trns_index = np.fromstring(chunk_data, dtype=np.uint8)[0]
+        trns_index = np.frombuffer(chunk_data, dtype=np.uint8)[0]
         trns_color = palette[trns_index]
         assert_equal(trns_color, transparent)
     else:
@@ -118,7 +118,7 @@ def check_idat(file_contents, color_type, bit_depth, interlace, img,
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"IDAT")
     decompressed = zlib.decompress(chunk_data)
-    stream = np.fromstring(decompressed, dtype=np.uint8)
+    stream = np.frombuffer(decompressed, dtype=np.uint8)
     height, width = img.shape[:2]
     img2 = stream_to_array(stream, width, height, color_type, bit_depth,
                            interlace)
@@ -596,7 +596,7 @@ class TestWritePng(unittest.TestCase):
                     chunk_type, chunk_data, file_contents = \
                         next_chunk(file_contents)
                     self.assertEqual(chunk_type, b"PLTE")
-                    p = np.fromstring(chunk_data,
+                    p = np.frombuffer(chunk_data,
                                       dtype=np.uint8).reshape(-1, 3)
                     n = ncolors*3
                     expected = np.arange(n, dtype=np.uint8).reshape(-1, 3)
@@ -613,7 +613,7 @@ class TestWritePng(unittest.TestCase):
                         next_chunk(file_contents)
                     self.assertEqual(chunk_type, b"IDAT")
                     decompressed = zlib.decompress(chunk_data)
-                    stream = np.fromstring(decompressed, dtype=np.uint8)
+                    stream = np.frombuffer(decompressed, dtype=np.uint8)
                     height, width = img.shape[:2]
                     img2 = stream_to_array(stream, width, height, color_type=3,
                                            bit_depth=bitdepth,
@@ -653,7 +653,7 @@ class TestWritePng(unittest.TestCase):
             zstream += chunk_data
             self.assertLessEqual(len(chunk_data), max_chunk_len)
         data = zlib.decompress(zstream)
-        b = np.fromstring(data, dtype=np.uint8)
+        b = np.frombuffer(data, dtype=np.uint8)
         lines = b.reshape(h, w + 1)
         img2 = lines[:, 1:].reshape(h, w)
         assert_array_equal(img2, img)
@@ -763,7 +763,7 @@ class TestWritePng(unittest.TestCase):
             # Check the PLTE chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
             self.assertEqual(chunk_type, b"PLTE")
-            plte = np.fromstring(chunk_data, dtype=np.uint8).reshape(-1, 3)
+            plte = np.frombuffer(chunk_data, dtype=np.uint8).reshape(-1, 3)
             expected_palette = np.arange(1, w*h*3+1,
                                          dtype=np.uint8).reshape(-1, 3)
             if bg_in_img:
@@ -982,7 +982,7 @@ class TestWriteApng(unittest.TestCase):
             self.assertEqual(actual_seq_num, sequence_number)
             sequence_number += 1
             decompressed = zlib.decompress(chunk_data[4:])
-            b = np.fromstring(decompressed, dtype=np.uint8)
+            b = np.frombuffer(decompressed, dtype=np.uint8)
             lines = b.reshape(h, 4*w+1)
             expected_col0 = np.zeros(h, dtype=np.uint8)
             assert_array_equal(lines[:, 0], expected_col0)
@@ -1036,7 +1036,7 @@ class TestWriteApng(unittest.TestCase):
             self.assertEqual(actual_seq_num, sequence_number)
             sequence_number += 1
             decompressed = zlib.decompress(chunk_data[4:])
-            b = np.fromstring(decompressed, dtype=np.uint8)
+            b = np.frombuffer(decompressed, dtype=np.uint8)
             lines = b.reshape(h, 4*w+1)
             expected_col0 = np.zeros(h, dtype=np.uint8)
             assert_array_equal(lines[:, 0], expected_col0)
@@ -1103,7 +1103,7 @@ class TestWriteApng(unittest.TestCase):
                 self.assertEqual(actual_seq_num, sequence_number)
                 sequence_number += 1
                 decompressed = zlib.decompress(chunk_data[4:])
-                b = np.fromstring(decompressed, dtype=np.uint8)
+                b = np.frombuffer(decompressed, dtype=np.uint8)
                 img2 = stream_to_array(b, w, h, color_type=2,
                                        bit_depth=bit_depth, interlace=0)
                 assert_array_equal(img2, seq[k])
