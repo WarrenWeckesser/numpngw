@@ -47,7 +47,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.8.dev0"
+__version__ = "0.0.8.dev1"
 
 _PY3 = _sys.version_info > (3,)
 if _PY3:
@@ -1349,11 +1349,11 @@ class AnimatedPNGWriter(object):
         # A bit of experimentation suggested that taking the integer part of
         # the following products is the correct conversion, but I haven't
         # verified it in the matplotlib code.  If this is not the correct
-        # conversion, the call of the reshape method after calling fromstring
+        # conversion, the call of the reshape method after calling frombuffer
         # will likely raise an exception.
         height = int(self.fig.get_figheight() * self.dpi)
         width = int(self.fig.get_figwidth() * self.dpi)
-        a = _np.fromstring(raw, dtype=_np.uint8).reshape(height, width, 4)
+        a = _np.frombuffer(raw, dtype=_np.uint8).reshape(height, width, 4)
 
         if self._prev_frame is None:
             self._frames.append((a, (0, 0), self._delay))
