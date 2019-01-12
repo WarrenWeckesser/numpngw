@@ -287,7 +287,7 @@ def _write_phys(f, phys):
 
 def _write_iccp(f, iccp):
     """Write a iCCP chunk to `f`."""
-    profile_name = iccp[0].strip().encode('latin-1')
+    profile_name = _encode_latin1(iccp[0].strip())
     compressed_profile = _zlib.compress(iccp[1])
     chunk_data = profile_name + b'\0\0' + compressed_profile
     _write_chunk(f, b"iCCP", chunk_data)
@@ -647,7 +647,7 @@ def _validate_iccp(iccp):
         if len(iccp[0]) > 78:
             raise ValueError('First element of `iccp` must be under 78 bytes.')
         try:
-            iccp[0].encode('latin-1')
+            _encode_latin1(iccp[0])
         except UnicodeEncodeError:
             raise ValueError('First element of `iccp` must be Latin-1.')
         if type(iccp[1]) != bytes:
