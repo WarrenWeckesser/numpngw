@@ -647,7 +647,7 @@ def _validate_iccp(iccp):
         if len(iccp[0]) > 78:
             raise ValueError('First element of `iccp` must be under 78 bytes.')
         try:
-        	iccp[0].encode('latin-1')
+            iccp[0].encode('latin-1')
         except UnicodeEncodeError:
             raise ValueError('First element of `iccp` must be Latin-1.')
         if type(iccp[1]) != bytes:
