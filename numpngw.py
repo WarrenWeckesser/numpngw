@@ -1157,7 +1157,6 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                              "allowed when using a palette." %
                              (len(palette), bd, max_num_colors))
 
-
         if background is not None:
             # A default background color has been given, and we're creating
             # an indexed palette (use_palette is True).  Convert the given
