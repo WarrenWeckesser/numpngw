@@ -33,6 +33,8 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
         if start != png_signature:
             print("ERROR: First 8 bytes %r are not the standard PNG signature."
                   % (start,))
+        # compressed_contents will hold the contents of the IDAT chunk(s).
+        compressed_contents = []
         while True:
             lenstr = f.read(4)
             if len(lenstr) == 0:
@@ -55,12 +57,14 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
             if chunk_type == b'IHDR':
                 fmt = "!IIBBBBB"
                 values = struct.unpack(fmt, content)
-                width, height, nbits, color_type, _, _, interlace = values
+                width, height, nbits, color_type, compression, _, interlace = values
                 print("%s: width=%i  height=%i  nbits=%i  "
                       "color_type=%i (%s)  interlace=%i (%s)" %
                       (chunk_type, width, height, nbits,
                        color_type, color_types[color_type],
                        interlace, interlaces[interlace]))
+                if compression != 0:
+                    print("ERROR: Unknown compression method %i" % compression)
             elif chunk_type == b'acTL':
                 num_frames, num_plays = struct.unpack("!II", content)
                 print("%s: num_frames=%i  num_plays=%i" %
@@ -75,7 +79,7 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
                       (chunk_type, sequence_number, width, height,
                        x_offset, y_offset, delay_num, delay_den))
             elif chunk_type == b'IDAT':
-                u = zlib.decompress(content)
+                compressed_contents.append(content)
                 descr = ">u" + ('1' if nbits == 8 else '2')
                 if color_type == 2:
                     row_data_len = 3*width
@@ -134,7 +138,7 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
                     value = struct.unpack("!HHH", content)
                     msg = "value=%r" % (value,)
                 elif color_type == 3:
-                    values = [struct.unpack('B', c) for c in content]
+                    values = tuple(content)
                     if print_trans:
                         msg = ",".join("%i" % t for t in values)
                     else:
@@ -166,3 +170,14 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
                     print("         text: %r" % text)
             else:
                 print("%s: (%i bytes)" % (chunk_type, len(content)))
+
+        if len(compressed_contents) == 0:
+            print("ERROR: No IDAT chunks found.")
+        compressed_datastream = b''.join(compressed_contents)
+        print("Compressed image datastream has", len(compressed_datastream), "bytes.")
+        try:
+            u = zlib.decompress(compressed_datastream)
+        except Exception:
+            print("ERROR: Failed to decompress the image data.")
+        else:
+            print("Decompressed image datastream has", len(u), " bytes.")
