@@ -285,6 +285,14 @@ def _write_phys(f, phys):
     _write_chunk(f, b"pHYs", chunk_data)
 
 
+def _write_iccp(f, iccp):
+    """Write a iCCP chunk to `f`."""
+    profile_name = _encode_latin1(iccp[0].strip())
+    compressed_profile = _zlib.compress(iccp[1])
+    chunk_data = profile_name + b'\0\0' + compressed_profile
+    _write_chunk(f, b"iCCP", chunk_data)
+
+
 def _write_idat(f, data):
     """Write an IDAT chunk to `f`."""
     _write_chunk(f, b"IDAT", data)
@@ -630,6 +638,23 @@ def _validate_phys(phys):
     return phys
 
 
+def _validate_iccp(iccp):
+    if iccp is not None:
+        if len(iccp) != 2:
+            raise ValueError('`iccp` must have two elements.')
+        if type(iccp[0]) != str:
+            raise ValueError('First element of `iccp` must be str.')
+        if len(iccp[0]) > 78:
+            raise ValueError('First element of `iccp` must be under 78 bytes.')
+        try:
+            _encode_latin1(iccp[0])
+        except UnicodeEncodeError:
+            raise ValueError('First element of `iccp` must be Latin-1.')
+        if type(iccp[1]) != bytes:
+            raise ValueError('Second element of `iccp` must be bytes.')
+    return iccp
+
+
 def _add_background_color(background, palette, trans, bitdepth):
     if len(background) != 3:
         raise ValueError("background must have length 3 when "
@@ -666,7 +691,7 @@ def _add_background_color(background, palette, trans, bitdepth):
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
               timestamp=None, gamma=None, background=None,
-              filter_type=None, interlace=0, phys=None):
+              filter_type=None, interlace=0, phys=None, iccp=None):
     """
     Write a numpy array to a PNG file.
 
@@ -928,6 +953,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     # pHYs chunk, if `phys` was given.
     if phys is not None:
         _write_phys(f, phys)
+
+    # iCCP chunk, if `iccp` was given.
+    if iccp is not None:
+        _write_iccp(f, iccp)
 
     # _write_data(...) writes the IDAT chunk(s).
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
