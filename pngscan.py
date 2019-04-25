@@ -57,7 +57,8 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
             if chunk_type == b'IHDR':
                 fmt = "!IIBBBBB"
                 values = struct.unpack(fmt, content)
-                width, height, nbits, color_type, compression, _, interlace = values
+                (width, height, nbits, color_type, compression, _,
+                    interlace) = values
                 print("%s: width=%i  height=%i  nbits=%i  "
                       "color_type=%i (%s)  interlace=%i (%s)" %
                       (chunk_type, width, height, nbits,
@@ -174,7 +175,8 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
         if len(compressed_contents) == 0:
             print("ERROR: No IDAT chunks found.")
         compressed_datastream = b''.join(compressed_contents)
-        print("Compressed image datastream has", len(compressed_datastream), "bytes.")
+        print("Compressed image datastream has", len(compressed_datastream),
+              "bytes.")
         try:
             u = zlib.decompress(compressed_datastream)
         except Exception:
