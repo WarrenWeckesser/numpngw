@@ -1039,7 +1039,8 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                text_list=None, use_palette=False,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
-               background=None, filter_type=None, interlace=0, phys=None):
+               background=None, filter_type=None, interlace=0, phys=None,
+               iccp=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -1127,6 +1128,14 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         pixels per *meter*.  If the third value is 0 (or not given),
         the units of the first two values are undefined.  In that case,
         the values define the pixel aspect ratio only.
+    iccp : tuple with length 2, optional
+        ICCP color profile. If given, the argument must be a tuple of length 2.
+        The first element must be a string containing the profile name.  The
+        profile name is subject to the same restrictions as the keywords in the
+        text_list argument; see the Notes for more information about these
+        restrictions.  The second element is the profile data, and it must be a
+        bytes object.  This data is not validated.  It is written "as is" to
+        the PNG file.
 
     Notes
     -----
@@ -1284,6 +1293,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
 
     if gamma is not None:
         _write_gama(f, gamma)
+
+    # iCCP chunk, if `iccp` was given.
+    if iccp is not None:
+        _write_iccp(f, iccp)
 
     # PLTE chunk, if requested.
     if color_type == 3:
