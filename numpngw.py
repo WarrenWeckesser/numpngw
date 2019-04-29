@@ -974,6 +974,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if gamma is not None:
         _write_gama(f, gamma)
 
+    # iCCP chunk, if `iccp` was given.
+    if iccp is not None:
+        _write_iccp(f, iccp)
+
     # PLTE chunk, if requested.
     if color_type == 3:
         _write_plte(f, palette)
@@ -989,10 +993,6 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     # pHYs chunk, if `phys` was given.
     if phys is not None:
         _write_phys(f, phys)
-
-    # iCCP chunk, if `iccp` was given.
-    if iccp is not None:
-        _write_iccp(f, iccp)
 
     # _write_data(...) writes the IDAT chunk(s).
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
