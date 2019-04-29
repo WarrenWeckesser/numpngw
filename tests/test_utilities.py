@@ -120,16 +120,18 @@ class TestUtilities(unittest.TestCase):
                       [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]], dtype=np.uint8)
         b = numpngw._pack(a, 1)
         expected_b = np.array([[0b01001000, 0b01100000],
-                               [0b11111111, 0b00100000],
+                               [0b11110000, 0b00100000],
                                [0b10101010, 0b10100000]], dtype=np.uint8)
+        assert_array_equal(b, expected_b)
 
         a = np.array([[0, 1, 0, 0, 1, 0, 0, 0],
                       [1, 1, 1, 1, 0, 0, 0, 0],
                       [1, 0, 1, 0, 1, 0, 1, 0]], dtype=np.uint8)
         b = numpngw._pack(a, 1)
         expected_b = np.array([[0b01001000],
-                               [0b11111111],
+                               [0b11110000],
                                [0b10101010]], dtype=np.uint8)
+        assert_array_equal(b, expected_b)
 
         a = np.array([[2, 1, 2, 1, 0],
                       [1, 2, 2, 3, 2],
@@ -140,6 +142,7 @@ class TestUtilities(unittest.TestCase):
                                [0b01101011, 0b10000000],
                                [0b11111010, 0b01000000],
                                [0b00000000, 0b00000000]], dtype=np.uint8)
+        assert_array_equal(b, expected_b)
 
         a = np.array([[2, 1, 2, 1],
                       [1, 2, 2, 3],
@@ -150,6 +153,7 @@ class TestUtilities(unittest.TestCase):
                                [0b01101011],
                                [0b11111010],
                                [0b00000000]], dtype=np.uint8)
+        assert_array_equal(b, expected_b)
 
         a = np.array([[0xD, 0xE, 0xA, 0xD],
                       [0xB, 0xE, 0xE, 0xF],
@@ -168,6 +172,7 @@ class TestUtilities(unittest.TestCase):
         expected_b = np.array([[0xCA, 0xFE, 0x00],
                                [0x43, 0x21, 0xF0],
                                [0x00, 0x00, 0x10]], dtype=np.uint8)
+        assert_array_equal(b, expected_b)
 
 
 if __name__ == '__main__':
