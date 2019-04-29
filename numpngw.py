@@ -287,7 +287,8 @@ def _write_phys(f, phys):
 
 def _write_iccp(f, iccp):
     """Write a iCCP chunk to `f`."""
-    profile_name = _encode_latin1(iccp[0].strip())
+    _validate_iccp(iccp)
+    profile_name = _encode_latin1(iccp[0])
     compressed_profile = _zlib.compress(iccp[1])
     chunk_data = profile_name + b'\0\0' + compressed_profile
     _write_chunk(f, b"iCCP", chunk_data)
@@ -412,6 +413,43 @@ def _encode_latin1(s):
     return s
 
 
+def _validate_keyword(keyword, keyname='keyword'):
+    """
+    From http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html:
+
+        The keyword must be at least one character and less than 80 characters
+        long. Keywords are always interpreted according to the ISO/IEC 8859-1
+        (Latin-1) character set [ISO/IEC-8859-1]. They must contain only
+        printable Latin-1 characters and spaces; that is, only character
+        codes 32-126 and 161-255 decimal are allowed. To reduce the chances
+        for human misreading of a keyword, leading and trailing spaces are
+        forbidden, as are consecutive spaces. Note also that the non-breaking
+        space (code 160) is not permitted in keywords, since it is visually
+        indistinguishable from an ordinary space.
+
+    """
+    if not (0 < len(keyword) < 80):
+        raise ValueError("length of %s must greater than 0 and less "
+                         "than 80." % (keyname,))
+
+    kw_check = all([(31 < _bord(c) < 127) or (160 < _bord(c) < 256)
+                    for c in keyword])
+    if not kw_check:
+        raise ValueError("%s %r contains non-printable characters or "
+                         "a non-breaking space (code 160)." %
+                         (keyname, keyword,))
+
+    if keyword.startswith(b' '):
+        raise ValueError("%s %r begins with a space." % (keyname, keyword,))
+
+    if keyword.endswith(b' '):
+        raise ValueError("%s %r ends with a space." % (keyname, keyword,))
+
+    if b'  ' in keyword:
+        raise ValueError("%s %r contains consecutive spaces." %
+                         (keyname, keyword,))
+
+
 def _validate_text(text_list):
     if text_list is None:
         text_list = []
@@ -435,22 +473,7 @@ def _validate_text(text_list):
             # Drop elements where the text string is None.
             continue
 
-        # Validate the keyword.
-        if not (0 < len(keyword) < 80):
-            raise ValueError("length of keyword must greater than 0 and less "
-                             "than 80.")
-        kw_check = all([(31 < _bord(c) < 127) or (160 < _bord(c) < 256)
-                        for c in keyword])
-        if not kw_check:
-            raise ValueError("keyword %r contains non-printable characters." %
-                             (keyword,))
-        if keyword.startswith(b' '):
-            raise ValueError("keyword %r begins with a space." % (keyword,))
-        if keyword.endswith(b' '):
-            raise ValueError("keyword %r ends with a space." % (keyword,))
-        if b'  ' in keyword:
-            raise ValueError("keyword %r contains consecutive spaces." %
-                             (keyword,))
+        _validate_keyword(keyword)
 
         # Validate the text string.
         if b'\0' in text_string:
@@ -642,16 +665,21 @@ def _validate_iccp(iccp):
     if iccp is not None:
         if len(iccp) != 2:
             raise ValueError('`iccp` must have two elements.')
+
         if type(iccp[0]) != str:
             raise ValueError('First element of `iccp` must be str.')
-        if len(iccp[0]) > 78:
-            raise ValueError('First element of `iccp` must be under 78 bytes.')
+
         try:
-            _encode_latin1(iccp[0])
+            profile_name = _encode_latin1(iccp[0])
         except UnicodeEncodeError:
-            raise ValueError('First element of `iccp` must be Latin-1.')
+            raise ValueError('The profile name (the first element of `iccp`) '
+                             'must be encodable as Latin-1.')
+
+        _validate_keyword(profile_name, 'profile name')
+
         if type(iccp[1]) != bytes:
             raise ValueError('Second element of `iccp` must be bytes.')
+
     return iccp
 
 
@@ -762,6 +790,14 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         pixels per *meter*.  If the third value is 0 (or not given),
         the units of the first two values are undefined.  In that case,
         the values define the pixel aspect ratio only.
+    iccp : tuple with length 2, optional
+        ICCP color profile. If given, the argument must be a tuple of length 2.
+        The first element must be a string containing the profile name.  The
+        profile name is subject to the same restrictions as the keywords in the
+        text_list argument; see the Notes for more information about these
+        restrictions.  The second element is the profile data, and it must be a
+        bytes object.  This data is not validated.  It is written "as is" to
+        the PNG file.
 
     Notes
     -----
