@@ -100,6 +100,15 @@ def check_phys(file_contents, phys):
     return file_contents
 
 
+def check_chrm(file_contents, chrm):
+    # chrm must be the scaled integer version of the chromaticity values.
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"cHRM")
+    values = struct.unpack("!IIIIIIII", chunk_data)
+    assert_array_equal(np.array(values).reshape(4, 2),  chrm)
+    return file_contents
+
+
 def check_text(file_contents, keyword, text_string=None):
     # If text_string is None, this code just checks the keyword.
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
@@ -665,13 +674,18 @@ class TestWritePng(unittest.TestCase):
 
         self.assertEqual(file_contents, b"")
 
-    def test_write_png_timestamp_gamma(self):
+    def test_write_png_timestamp_gamma_chromaticity(self):
         np.random.seed(123)
         img = np.random.randint(0, 256, size=(10, 10)).astype(np.uint8)
         f = io.BytesIO()
         timestamp = (1452, 4, 15, 8, 9, 10)
         gamma = 2.2
-        numpngw.write_png(f, img, timestamp=timestamp, gamma=gamma)
+        chromaticity = [[0.500, 0.750],
+                        [0.125, 0.960],
+                        [0.875, 0.625],
+                        [0.750, 0.375]]
+        numpngw.write_png(f, img, timestamp=timestamp, gamma=gamma,
+                          chromaticity=chromaticity)
 
         file_contents = f.getvalue()
 
@@ -688,6 +702,9 @@ class TestWritePng(unittest.TestCase):
         file_contents = check_time(file_contents, timestamp)
 
         file_contents = check_gama(file_contents, gamma)
+
+        expected_chrm = (100000*np.array(chromaticity) + 0.5).astype(np.uint32)
+        file_contents = check_chrm(file_contents, expected_chrm)
 
         file_contents = check_idat(file_contents, color_type=0, bit_depth=8,
                                    interlace=0, img=img)
@@ -1047,10 +1064,15 @@ class TestWriteApng(unittest.TestCase):
 
     def test_write_apng_bkgd(self):
         # Test creation of RGB images (color type 2), with a background color.
+        # Also test the chromaticity argument.
         w = 16
         h = 8
         np.random.seed(123)
         num_frames = 3
+        chromaticity = [[0.500, 0.750],
+                        [0.125, 0.960],
+                        [0.875, 0.625],
+                        [0.750, 0.375]]
         for bit_depth in [8, 16]:
             maxval = 2**bit_depth
             bg = (maxval - 1, maxval - 2, maxval - 3)
@@ -1059,7 +1081,8 @@ class TestWriteApng(unittest.TestCase):
                                     size=(num_frames, h, w, 3)).astype(dt)
 
             f = io.BytesIO()
-            numpngw.write_apng(f, seq, background=bg, filter_type=0)
+            numpngw.write_apng(f, seq, background=bg, filter_type=0,
+                               chromaticity=chromaticity)
 
             file_contents = f.getvalue()
 
@@ -1073,6 +1096,9 @@ class TestWriteApng(unittest.TestCase):
             software = numpngw._software_text().encode('latin-1')
             file_contents = check_text(file_contents, b"Software",
                                        software)
+
+            expected_chrm = (100000*np.array(chromaticity) + 0.5).astype(np.uint32)
+            file_contents = check_chrm(file_contents, expected_chrm)
 
             file_contents = check_bkgd(file_contents, color=bg, color_type=2)
 

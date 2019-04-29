@@ -294,6 +294,13 @@ def _write_iccp(f, iccp):
     _write_chunk(f, b"iCCP", chunk_data)
 
 
+def _write_chrm(f, chromaticity):
+    """Write a cHRM chunk to `f`."""
+    data = (100000 * _np.array(chromaticity) + 0.5).astype(_np.uint32)
+    chunk_data = _struct.pack('!IIIIIIII', *data.ravel())
+    _write_chunk(f, b'cHRM', chunk_data)
+
+
 def _write_idat(f, data):
     """Write an IDAT chunk to `f`."""
     _write_chunk(f, b"IDAT", data)
@@ -683,6 +690,20 @@ def _validate_iccp(iccp):
     return iccp
 
 
+def _validate_chromaticity(chromaticity):
+    if chromaticity is not None:
+        if len(chromaticity) != 4:
+            raise ValueError('chromaticity must be a sequence with length 4.')
+        for pair in chromaticity:
+            if len(pair) != 2:
+                raise ValueError('each item in chromaticity must be a '
+                                 'sequence of length 2.')
+            if not ((0 <= pair[0] <=1) and (0 <= pair[1] <= 1)):
+                raise ValueError('each value in chromaticity must be between '
+                                 '0 and 1.')
+    return chromaticity
+
+
 def _add_background_color(background, palette, trans, bitdepth):
     if len(background) != 3:
         raise ValueError("background must have length 3 when "
@@ -719,7 +740,8 @@ def _add_background_color(background, palette, trans, bitdepth):
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
               timestamp=None, gamma=None, background=None,
-              filter_type=None, interlace=0, phys=None, iccp=None):
+              filter_type=None, interlace=0, phys=None, iccp=None,
+              chromaticity=None):
     """
     Write a numpy array to a PNG file.
 
@@ -798,6 +820,11 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         restrictions.  The second element is the profile data, and it must be a
         bytes object.  This data is not validated.  It is written "as is" to
         the PNG file.
+    chromaticity : array-like, optional
+        The four chromaticity values: white point, red, green and blue.
+        If given, the value must be a sequence of length four containing pairs
+        (x, y) of chromaticity values.  The values must be floating point
+        in the interval [0, 1].
 
     Notes
     -----
@@ -858,8 +885,8 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     _validate_array(a)
 
     text_list = _validate_text(text_list)
-
     timestamp = _validate_timestamp(timestamp)
+    chromaticity = _validate_chromaticity(chromaticity)
 
     # Determine color_type:
     #
@@ -978,6 +1005,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
     if iccp is not None:
         _write_iccp(f, iccp)
 
+    # cHRM chunk, if `chromaticity` was given.
+    if chromaticity is not None:
+        _write_chrm(f, chromaticity)
+
     # PLTE chunk, if requested.
     if color_type == 3:
         _write_plte(f, palette)
@@ -1040,7 +1071,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
                background=None, filter_type=None, interlace=0, phys=None,
-               iccp=None):
+               iccp=None, chromaticity=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -1136,6 +1167,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         restrictions.  The second element is the profile data, and it must be a
         bytes object.  This data is not validated.  It is written "as is" to
         the PNG file.
+    chromaticity : array-like, optional
+        The four chromaticity values: white point, red, green and blue.
+        If given, the value must be a sequence of length four containing pairs
+        (x, y) of chromaticity values.  The values must be floating point
+        in the interval [0, 1].
 
     Notes
     -----
@@ -1200,13 +1236,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                              (default_image.shape[:2] + (height, width)))
 
     text_list = _validate_text(text_list)
-
     phys = _validate_phys(phys)
-
     timestamp = _validate_timestamp(timestamp)
+    chromaticity = _validate_chromaticity(chromaticity)
 
     color_type = _get_color_type(seq[0], use_palette)
-
     trans = None
     if color_type == 3:
         # The arrays are 8 bit RGB or RGBA, and a palette is to be created.
@@ -1297,6 +1331,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     # iCCP chunk, if `iccp` was given.
     if iccp is not None:
         _write_iccp(f, iccp)
+
+    # cHRM chunk, if `chromaticity` was given.
+    if chromaticity is not None:
+        _write_chrm(f, chromaticity)
 
     # PLTE chunk, if requested.
     if color_type == 3:
