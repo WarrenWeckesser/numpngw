@@ -14,7 +14,8 @@ Capabilities of ``write_png`` include:
 * creation of RGB and grayscale images with an alpha channel;
 * setting a transparent color;
 * automatic creation of a palette for an indexed PNG file;
-* inclusion of ``tEXt``, ``tIME``, ``bKGD``, ``pHYs`` and ``gAMA`` chunks.
+* inclusion of ``tEXt``, ``tIME``, ``bKGD``, ``pHYs``, ``gAMA``, ``cHRM``
+  and ``iCCP`` chunks.
 
 The package is written in pure python.  The only external dependencies
 are numpy and setuptools.
