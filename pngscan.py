@@ -131,6 +131,13 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
             elif chunk_type == b'gAMA':
                 gama = struct.unpack('!I', content)[0]
                 print("%s: gama=%i  (%g)" % (chunk_type, gama, gama/100000.))
+            elif chunk_type == b'cHRM':
+                chrm = struct.unpack('!IIIIIIII', content)
+                print('%s: ' % (chunk_type,), end='')
+                print('white point:', chrm[:2], end='  ')
+                print('red:', chrm[2:4], end='  ')
+                print('green:', chrm[4:6], end='  ')
+                print('blue:', chrm[6:])
             elif chunk_type == b'tRNS':
                 if color_type == 0:
                     value = struct.unpack("!H", content)[0]
