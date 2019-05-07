@@ -42,6 +42,7 @@ import time as _time
 import struct as _struct
 import zlib as _zlib
 from fractions import Fraction as _Fraction
+import operator
 import numpy as _np
 
 
@@ -240,6 +241,12 @@ def _write_time(f, timestamp):
     """Write a tIME chunk to `f`."""
     chunk_data = _struct.pack('!HBBBBB', *timestamp)
     _write_chunk(f, b'tIME', chunk_data)
+
+
+def _write_sbit(f, sbit):
+    """Write an sBIT chunk to `f`."""
+    chunk_data = _struct.pack('BBBB'[:len(sbit)], *sbit)
+    _write_chunk(f, b'sBIT', chunk_data)
 
 
 def _write_gama(f, gamma):
@@ -646,6 +653,14 @@ def _validate_bitdepth(bitdepth, a, color_type):
             if bitdepth == 16:
                 raise ValueError("Bit depth 16 not allowed when use_palette "
                                  "is True.")
+    else:
+        # Given bitdepth is None
+        if color_type == 3:
+            bitdepth = 8
+        else:
+            bitdepth = 8*a.dtype.itemsize
+
+    return bitdepth
 
 
 def _validate_timestamp(timestamp):
@@ -704,6 +719,32 @@ def _validate_chromaticity(chromaticity):
     return chromaticity
 
 
+def _validate_sbit(sbit, color_type, bitdepth):
+    try:
+        len_sbit = len(sbit)
+    except TypeError:
+        sbit = (sbit,)
+        len_sbit = 1
+
+    try:
+        [operator.index(n) for n in sbit]
+    except Exception:
+        raise ValueError('Each value in sbit must be an integer.')
+
+    # Mapping from color_type to required length of sbit:
+    required_length = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}
+
+    if len_sbit != required_length[color_type]:
+        raise ValueError('For color type %d, len(sbit) must be %d' %
+                         (color_type, required_length[color_type]))
+    for n in sbit:
+        if n < 1 or n > bitdepth:
+            raise ValueError('Each value in sbit must be greater than 0 '
+                             'and less than or equal to the bit depth %s'
+                             % bitdepth)
+    return sbit
+
+
 def _add_background_color(background, palette, trans, bitdepth):
     if len(background) != 3:
         raise ValueError("background must have length 3 when "
@@ -741,7 +782,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
               timestamp=None, gamma=None, background=None,
               filter_type=None, interlace=0, phys=None, iccp=None,
-              chromaticity=None):
+              chromaticity=None, sbit=None):
     """
     Write a numpy array to a PNG file.
 
@@ -825,6 +866,11 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         If given, the value must be a sequence of length four containing pairs
         (x, y) of chromaticity values.  The values must be floating point
         in the interval [0, 1].
+    sbit : sequence of 1, 2, 3, or 4 integers, optional
+        If given, the value(s) are written in an `sBIT` chunk in the PNG
+        file.  The values indicate the original number of significant bits
+        in each color (and alpha, if applicable) channel.  The values must be
+        compatible with the color type and bit depth of the image data.
 
     Notes
     -----
@@ -968,7 +1014,12 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         # XXX Should do some validation of `transparent`...
         trans = _np.asarray(transparent, dtype=_np.uint16)
 
-    _validate_bitdepth(bitdepth, a, color_type)
+    bitdepth =_validate_bitdepth(bitdepth, a, color_type)
+
+    # Now that we have the color_type and bit-depth, we can validate the
+    # sbit argument, if one was given.
+    if sbit is not None:
+        sbit = _validate_sbit(sbit, color_type, bitdepth)
 
     if hasattr(fileobj, 'write'):
         # Assume it is a file-like object with a write method.
@@ -997,6 +1048,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
     if timestamp is not None:
         _write_time(f, timestamp)
+
+    # sBIT must preceed PLTE (if present) and first IDAT chunk.
+    if sbit is not None:
+        _write_sbit(f, sbit)
 
     if gamma is not None:
         _write_gama(f, gamma)
@@ -1071,7 +1126,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                transparent=None, bitdepth=None,
                max_chunk_len=None, timestamp=None, gamma=None,
                background=None, filter_type=None, interlace=0, phys=None,
-               iccp=None, chromaticity=None):
+               iccp=None, chromaticity=None, sbit=None):
     """
     Write an APNG file from a sequence of numpy arrays.
 
@@ -1172,6 +1227,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         If given, the value must be a sequence of length four containing pairs
         (x, y) of chromaticity values.  The values must be floating point
         in the interval [0, 1].
+    sbit : sequence of 1, 2, 3, or 4 integers, optional
+        If given, the value(s) are written in an `sBIT` chunk in the PNG
+        file.  The values indicate the original number of significant bits
+        in each color (and alpha, if applicable) channel.  The values must be
+        compatible with the color type and bit depth of the image data.
 
     Notes
     -----
@@ -1293,7 +1353,12 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     if bitdepth == 8 and seq[0].dtype == _np.uint8:
         bitdepth = None
 
-    _validate_bitdepth(bitdepth, seq[0], color_type)
+    bitdepth = _validate_bitdepth(bitdepth, seq[0], color_type)
+
+    # Now that we have the color_type and bit-depth, we can validate the
+    # sbit argument, if one was given.
+    if sbit is not None:
+        sbit = _validate_sbit(sbit, color_type, bitdepth)
 
     # --- Open and write the file ---------
 
@@ -1324,6 +1389,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
 
     if timestamp is not None:
         _write_time(f, timestamp)
+
+    # sBIT must preceed PLTE (if present) and first IDAT chunk.
+    if sbit is not None:
+        _write_sbit(f, sbit)
 
     if gamma is not None:
         _write_gama(f, gamma)

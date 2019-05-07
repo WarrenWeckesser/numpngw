@@ -128,6 +128,11 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
                 print("%s: year=%i  month=%i  day=%i  "
                       "hour=%i  minute=%i  second=%i" %
                       ((chunk_type,) + values))
+            elif chunk_type == b'sBIT':
+                # Mapping from color_type to required length of sbit:
+                len_sbit = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}[color_type]
+                values = struct.unpack('BBBB'[:len_sbit], content)
+                print('%s: %s' % (chunk_type, values,))
             elif chunk_type == b'gAMA':
                 gama = struct.unpack('!I', content)[0]
                 print("%s: gama=%i  (%g)" % (chunk_type, gama, gama/100000.))
