@@ -121,6 +121,16 @@ def check_text(file_contents, keyword, text_string=None):
     return file_contents
 
 
+def check_sbit(file_contents, sbit, color_type):
+    chunk_type, chunk_data, file_contents = next_chunk(file_contents)
+    assert_equal(chunk_type, b"sBIT")
+    # Mapping from color_type to required length of sbit:
+    required_length = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}
+    values = struct.unpack('BBBB'[:len(chunk_data)], chunk_data)
+    assert_equal(values, sbit)
+    return file_contents
+
+
 def check_idat(file_contents, color_type, bit_depth, interlace, img,
                palette=None):
     # This function assumes the entire image is in the chunk.
@@ -745,6 +755,52 @@ class TestWritePng(unittest.TestCase):
                                        img=img)
 
             check_iend(file_contents)
+
+    def test_write_png_sbit(self):
+        # Test creation of sBIT chunks for color_type 0 and 2.
+        w = 7
+        h = 5
+        np.random.seed(123)
+        for bit_depth in [8, 16]:
+            for size in [(h, w), (h, w, 3)]:
+                maxval = 2**bit_depth
+                dt = np.uint16 if bit_depth == 16 else np.uint8
+                img = np.random.randint(0, maxval, size=size).astype(dt)
+
+                color_type = 0 if len(size) == 2 else 2
+
+                sbit = (bit_depth - 1,)
+                if color_type == 2:
+                    sbit = sbit * 3
+
+                f = io.BytesIO()
+                numpngw.write_png(f, img, sbit=sbit)
+
+                file_contents = f.getvalue()
+
+                file_contents = check_signature(file_contents)
+
+
+                file_contents = check_ihdr(file_contents, width=w, height=h,
+                                           bit_depth=bit_depth,
+                                           color_type=color_type,
+                                           interlace=0)
+
+                file_contents = check_text(file_contents, b"Creation Time")
+                software = numpngw._software_text().encode('latin-1')
+                file_contents = check_text(file_contents, b"Software",
+                                           software)
+
+                file_contents = check_sbit(file_contents, sbit=sbit,
+                                           color_type=color_type)
+
+                file_contents = check_idat(file_contents,
+                                           color_type=color_type,
+                                           bit_depth=bit_depth,
+                                           interlace=0,
+                                           img=img)
+
+                check_iend(file_contents)
 
     def test_write_png_bkgd_palette(self):
         # Test creation of RGB images with a background color
