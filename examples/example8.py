@@ -82,6 +82,6 @@ ani = animation.FuncAnimation(fig, update_line, frames=len(t),
                               init_func=lambda : None,
                               fargs=(x, sol, lineplot))
 writer = AnimatedPNGWriter(fps=12)
-ani.save('kdv.png', dpi=60, writer=writer)
+ani.save('example8.png', dpi=60, writer=writer)
 
 plt.close(fig)
