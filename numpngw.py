@@ -778,6 +778,61 @@ def _add_background_color(background, palette, trans, bitdepth):
     return background, palette, trans
 
 
+def _write_header_and_meta(f, dtype, shape, color_type, bitdepth, palette,
+                           interlace, text_list, timestamp, sbit, gamma, iccp,
+                           chromaticity, trans, background, phys):
+    # Write the PNG header.
+    f.write(b"\x89PNG\x0D\x0A\x1A\x0A")
+
+    # Write the chunks...
+
+    # IHDR chunk
+    if bitdepth is not None:
+        nbits = bitdepth
+    else:
+        nbits = dtype.itemsize*8
+    _write_ihdr(f, shape[1], shape[0], nbits, color_type, interlace)
+
+    # tEXt chunks, if any.
+    if text_list is not None:
+        for keyword, text_string in text_list:
+            _write_text(f, keyword, text_string)
+
+    if timestamp is not None:
+        _write_time(f, timestamp)
+
+    # sBIT must preceed PLTE (if present) and first IDAT chunk.
+    if sbit is not None:
+        _write_sbit(f, sbit)
+
+    if gamma is not None:
+        _write_gama(f, gamma)
+
+    # iCCP chunk, if `iccp` was given.
+    if iccp is not None:
+        _write_iccp(f, iccp)
+
+    # cHRM chunk, if `chromaticity` was given.
+    if chromaticity is not None:
+        _write_chrm(f, chromaticity)
+
+    # PLTE chunk, if requested.
+    if color_type == 3:
+        _write_plte(f, palette)
+
+    # tRNS chunk, if there is one.
+    if trans is not None:
+        _write_trns(f, trans)
+
+    # bKGD chunk, if there is one.
+    if background is not None:
+        _write_bkgd(f, background, color_type)
+
+    # pHYs chunk, if `phys` was given.
+    if phys is not None:
+        _write_phys(f, phys)
+
+
 def write_png(fileobj, a, text_list=None, use_palette=False,
               transparent=None,  bitdepth=None, max_chunk_len=None,
               timestamp=None, gamma=None, background=None,
@@ -963,6 +1018,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
 
     color_type = _get_color_type(a, use_palette)
 
+    palette = None
     trans = None
     if color_type == 3:
         # The array is 8 bit RGB or RGBA, and a palette is to be created.
@@ -1028,57 +1084,9 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         # Assume it is a filename.
         f = open(fileobj, "wb")
 
-    # Write the PNG header.
-    png_header = b"\x89PNG\x0D\x0A\x1A\x0A"
-    f.write(png_header)
-
-    # Write the chunks...
-
-    # IHDR chunk
-    if bitdepth is not None:
-        nbits = bitdepth
-    else:
-        nbits = a.dtype.itemsize*8
-    _write_ihdr(f, a.shape[1], a.shape[0], nbits, color_type, interlace)
-
-    # tEXt chunks, if any.
-    if text_list is not None:
-        for keyword, text_string in text_list:
-            _write_text(f, keyword, text_string)
-
-    if timestamp is not None:
-        _write_time(f, timestamp)
-
-    # sBIT must preceed PLTE (if present) and first IDAT chunk.
-    if sbit is not None:
-        _write_sbit(f, sbit)
-
-    if gamma is not None:
-        _write_gama(f, gamma)
-
-    # iCCP chunk, if `iccp` was given.
-    if iccp is not None:
-        _write_iccp(f, iccp)
-
-    # cHRM chunk, if `chromaticity` was given.
-    if chromaticity is not None:
-        _write_chrm(f, chromaticity)
-
-    # PLTE chunk, if requested.
-    if color_type == 3:
-        _write_plte(f, palette)
-
-    # tRNS chunk, if there is one.
-    if trans is not None:
-        _write_trns(f, trans)
-
-    # bKGD chunk, if there is one.
-    if background is not None:
-        _write_bkgd(f, background, color_type)
-
-    # pHYs chunk, if `phys` was given.
-    if phys is not None:
-        _write_phys(f, phys)
+    _write_header_and_meta(f, a.dtype, a.shape, color_type, bitdepth, palette,
+                           interlace, text_list, timestamp, sbit, gamma, iccp,
+                           chromaticity, trans, background, phys)
 
     # _write_data(...) writes the IDAT chunk(s).
     _write_data(f, a, bitdepth, max_chunk_len=max_chunk_len,
@@ -1301,6 +1309,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     chromaticity = _validate_chromaticity(chromaticity)
 
     color_type = _get_color_type(seq[0], use_palette)
+    palette = None
     trans = None
     if color_type == 3:
         # The arrays are 8 bit RGB or RGBA, and a palette is to be created.
@@ -1369,57 +1378,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         # Assume it is a filename.
         f = open(fileobj, "wb")
 
-    # Write the PNG header.
-    png_header = b"\x89PNG\x0D\x0A\x1A\x0A"
-    f.write(png_header)
-
-    # Write the chunks...
-
-    # IHDR chunk
-    if bitdepth is not None:
-        nbits = bitdepth
-    else:
-        nbits = seq[0].dtype.itemsize*8
-    _write_ihdr(f, width, height, nbits, color_type, interlace)
-
-    # tEXt chunks, if any.
-    if text_list is not None:
-        for keyword, text_string in text_list:
-            _write_text(f, keyword, text_string)
-
-    if timestamp is not None:
-        _write_time(f, timestamp)
-
-    # sBIT must preceed PLTE (if present) and first IDAT chunk.
-    if sbit is not None:
-        _write_sbit(f, sbit)
-
-    if gamma is not None:
-        _write_gama(f, gamma)
-
-    # iCCP chunk, if `iccp` was given.
-    if iccp is not None:
-        _write_iccp(f, iccp)
-
-    # cHRM chunk, if `chromaticity` was given.
-    if chromaticity is not None:
-        _write_chrm(f, chromaticity)
-
-    # PLTE chunk, if requested.
-    if color_type == 3:
-        _write_plte(f, palette)
-
-    # tRNS chunk, if there is one.
-    if trans is not None:
-        _write_trns(f, trans)
-
-    # bKGD chunk, if there is one.
-    if background is not None:
-        _write_bkgd(f, background, color_type)
-
-    # pHYs chunk, if `phys` was given.
-    if phys is not None:
-        _write_phys(f, phys)
+    _write_header_and_meta(f, seq[0].dtype, (height, width), color_type,
+                           bitdepth, palette, interlace, text_list, timestamp,
+                           sbit, gamma, iccp, chromaticity, trans, background,
+                           phys)
 
     # acTL chunk
     _write_actl(f, num_frames, num_plays)
