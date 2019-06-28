@@ -611,6 +611,33 @@ def _validate_array(a):
                          "unsigned integers")
 
 
+# Notes on color_type:
+#
+#  color_type   meaning                    tRNS chunk contents (optional)
+#  ----------   ------------------------   --------------------------------
+#      0        grayscale                  Single gray level value, 2 bytes
+#      2        RGB                        Single RGB, 2 bytes per channel
+#      3        8 bit indexed RGB or RGBA  Series of 1 byte alpha values
+#      4        Grayscale and alpha
+#      6        RGBA
+#
+#
+# from http://www.w3.org/TR/PNG/:
+# Table 11.1 - Allowed combinations of colour type and bit depth
+#
+#                      Color  Allowed
+# PNG image type       type  bit depths      Interpretation
+# Greyscale              0   1, 2, 4, 8, 16  Each pixel is a greyscale
+#                                            sample
+# Truecolour             2   8, 16           Each pixel is an RGB triple
+# Indexed-colour         3   1, 2, 4, 8      Each pixel is a palette index;
+#                                            a PLTE chunk shall appear.
+# Greyscale with alpha   4   8, 16           Each pixel is a greyscale
+#                                            sample followed by an alpha
+#                                            sample.
+# Truecolour with alpha  6   8, 16           Each pixel is an RGB triple
+#                                            followed by an alpha sample.
+
 def _get_color_type(a, use_palette):
     if a.ndim == 2:
         color_type = 0
@@ -743,6 +770,20 @@ def _validate_sbit(sbit, color_type, bitdepth):
                              'and less than or equal to the bit depth %s'
                              % bitdepth)
     return sbit
+
+
+def _common_validation(interlace, filter_type, phys, text_list, timestamp,
+                       chromaticity):
+    if interlace not in [0, 1]:
+        raise ValueError('interlace must be 0 or 1.')
+    if filter_type is None:
+        filter_type = "auto"
+    phys = _validate_phys(phys)
+    text_list = _validate_text(text_list)
+    timestamp = _validate_timestamp(timestamp)
+    chromaticity = _validate_chromaticity(chromaticity)
+
+    return filter_type, phys, text_list, timestamp, chromaticity
 
 
 def _add_background_color(background, palette, trans, bitdepth):
@@ -974,47 +1015,12 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         since it is visually indistinguishable from an ordinary space.
     """
 
-    if interlace not in [0, 1]:
-        raise ValueError('interlace must be 0 or 1.')
-
-    if filter_type is None:
-        filter_type = "auto"
-
-    phys = _validate_phys(phys)
+    filter_type, phys, text_list, timestamp, chromaticity = _common_validation(
+        interlace, filter_type, phys, text_list, timestamp, chromaticity
+    )
 
     a = _np.ascontiguousarray(a)
     _validate_array(a)
-
-    text_list = _validate_text(text_list)
-    timestamp = _validate_timestamp(timestamp)
-    chromaticity = _validate_chromaticity(chromaticity)
-
-    # Determine color_type:
-    #
-    #  color_type   meaning                    tRNS chunk contents (optional)
-    #  ----------   ------------------------   --------------------------------
-    #      0        grayscale                  Single gray level value, 2 bytes
-    #      2        RGB                        Single RGB, 2 bytes per channel
-    #      3        8 bit indexed RGB or RGBA  Series of 1 byte alpha values
-    #      4        Grayscale and alpha
-    #      6        RGBA
-    #
-    #
-    # from http://www.w3.org/TR/PNG/:
-    # Table 11.1 - Allowed combinations of colour type and bit depth
-    #
-    #                      Color  Allowed
-    # PNG image type       type  bit depths      Interpretation
-    # Greyscale              0   1, 2, 4, 8, 16  Each pixel is a greyscale
-    #                                            sample
-    # Truecolour             2   8, 16           Each pixel is an RGB triple
-    # Indexed-colour         3   1, 2, 4, 8      Each pixel is a palette index;
-    #                                            a PLTE chunk shall appear.
-    # Greyscale with alpha   4   8, 16           Each pixel is a greyscale
-    #                                            sample followed by an alpha
-    #                                            sample.
-    # Truecolour with alpha  6   8, 16           Each pixel is an RGB triple
-    #                                            followed by an alpha sample.
 
     color_type = _get_color_type(a, use_palette)
 
@@ -1247,11 +1253,9 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     See the `write_png` docstring for additional details about some
     of the arguments.
     """
-    if interlace not in [0, 1]:
-        raise ValueError('interlace must be 0 or 1.')
-
-    if filter_type is None:
-        filter_type = "auto"
+    filter_type, phys, text_list, timestamp, chromaticity = _common_validation(
+        interlace, filter_type, phys, text_list, timestamp, chromaticity
+    )
 
     num_frames = len(seq)
     if num_frames == 0:
@@ -1302,11 +1306,6 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
                              "exceeds the overall image size implied by `seq` "
                              "and `offset`, which is (%i,  %i)" %
                              (default_image.shape[:2] + (height, width)))
-
-    text_list = _validate_text(text_list)
-    phys = _validate_phys(phys)
-    timestamp = _validate_timestamp(timestamp)
-    chromaticity = _validate_chromaticity(chromaticity)
 
     color_type = _get_color_type(seq[0], use_palette)
     palette = None
