@@ -2,10 +2,6 @@ from __future__ import division, print_function
 
 import unittest
 import numpy as np
-try:
-    import nose
-except ImportError:
-    raise ImportError("The 'nose' package must be installed to run the tests.")
 from numpy.testing import assert_equal, assert_array_equal
 import numpngw
 
