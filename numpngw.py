@@ -1153,10 +1153,11 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
     seq : sequence of numpy arrays
         All the arrays must have the same shape and dtype.
     delay : scalar or sequence of scalars, optional
-        The time display the frames, in milliseconds.
+        The time duration that each frame is displayed, in milliseconds.
         If `delay` is None (the default) or 0, the frames are played as
-        fast as possible.  If `delay` is a sequence, it must have the same
-        length as `seq.
+        fast as possible.  If delay is an integer, each frame is displayed
+        for the same duration.  If `delay` is a sequence, it must have the
+        same length as `seq`.
     num_plays : int
         The number of times to repeat the animation.  If 0, the animation
         is repeated indefinitely.
