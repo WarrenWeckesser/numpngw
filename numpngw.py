@@ -193,8 +193,9 @@ def _create_stream(a, filter_type=None):
         row_be = row.astype('>' + row.dtype.str[1:]).view(_np.uint8)
         if filter_type == "heuristic":
             filtered_rows = [filt(row_be, prev_row) for filt in filters]
-            values = _np.array([_np.abs(fr.view(_np.int8).astype(_np.int)).sum()
-                                for fr in filtered_rows])
+            lst = [_np.abs(fr.view(_np.int8).astype(_np.int_)).sum()
+                   for fr in filtered_rows]
+            values = _np.array(lst)
             ftype = values.argmin()
             # Create the string, with the filter type prepended.
             lines.append(chr(ftype).encode('ascii') +
@@ -740,7 +741,7 @@ def _validate_chromaticity(chromaticity):
             if len(pair) != 2:
                 raise ValueError('each item in chromaticity must be a '
                                  'sequence of length 2.')
-            if not ((0 <= pair[0] <=1) and (0 <= pair[1] <= 1)):
+            if not ((0 <= pair[0] <= 1) and (0 <= pair[1] <= 1)):
                 raise ValueError('each value in chromaticity must be between '
                                  '0 and 1.')
     return chromaticity
@@ -1076,7 +1077,7 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         # XXX Should do some validation of `transparent`...
         trans = _np.asarray(transparent, dtype=_np.uint16)
 
-    bitdepth =_validate_bitdepth(bitdepth, a, color_type)
+    bitdepth = _validate_bitdepth(bitdepth, a, color_type)
 
     # Now that we have the color_type and bit-depth, we can validate the
     # sbit argument, if one was given.
@@ -1266,7 +1267,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         delay = [0] * num_frames
     else:
         try:
-            ndelay = len(delay)
+            len(delay)
         except TypeError:
             delay = [delay] * num_frames
         if len(delay) != num_frames:

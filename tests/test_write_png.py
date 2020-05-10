@@ -776,7 +776,6 @@ class TestWritePng(unittest.TestCase):
 
                 file_contents = check_signature(file_contents)
 
-
                 file_contents = check_ihdr(file_contents, width=w, height=h,
                                            bit_depth=bit_depth,
                                            color_type=color_type,
@@ -1149,7 +1148,8 @@ class TestWriteApng(unittest.TestCase):
             file_contents = check_text(file_contents, b"Software",
                                        software)
 
-            expected_chrm = (100000*np.array(chromaticity) + 0.5).astype(np.uint32)
+            t = 100000*np.array(chromaticity) + 0.5
+            expected_chrm = t.astype(np.uint32)
             file_contents = check_chrm(file_contents, expected_chrm)
 
             file_contents = check_bkgd(file_contents, color=bg, color_type=2)
