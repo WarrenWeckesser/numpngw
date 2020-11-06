@@ -48,7 +48,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.0.9.dev0"
+__version__ = "0.0.9.dev1"
 
 _PY3 = _sys.version_info > (3,)
 if _PY3:
@@ -199,11 +199,11 @@ def _create_stream(a, filter_type=None):
             ftype = values.argmin()
             # Create the string, with the filter type prepended.
             lines.append(chr(ftype).encode('ascii') +
-                         filtered_rows[ftype].tostring())
+                         filtered_rows[ftype].tobytes())
         else:
             filtered_row = filters[filter_type](row_be, prev_row)
             lines.append(chr(filter_type).encode('ascii') +
-                         filtered_row.tostring())
+                         filtered_row.tobytes())
         prev_row = row_be
     stream = b''.join(lines)
     return stream
@@ -258,12 +258,12 @@ def _write_gama(f, gamma):
 
 
 def _write_plte(f, palette):
-    _write_chunk(f, b"PLTE", palette.tostring())
+    _write_chunk(f, b"PLTE", palette.tobytes())
 
 
 def _write_trns(f, trans):
     trans_be = trans.astype('>' + trans.dtype.str[1:])
-    _write_chunk(f, b"tRNS", trans_be.tostring())
+    _write_chunk(f, b"tRNS", trans_be.tobytes())
 
 
 def _write_bkgd(f, color, color_type):
