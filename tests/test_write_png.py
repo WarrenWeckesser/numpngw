@@ -121,7 +121,7 @@ def check_sbit(file_contents, sbit, color_type):
     chunk_type, chunk_data, file_contents = next_chunk(file_contents)
     assert_equal(chunk_type, b"sBIT")
     # Mapping from color_type to required length of sbit:
-    required_length = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}
+    # required_length = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}
     values = struct.unpack('BBBB'[:len(chunk_data)], chunk_data)
     assert_equal(values, sbit)
     return file_contents

@@ -82,10 +82,10 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
             elif chunk_type == b'IDAT':
                 compressed_contents.append(content)
                 descr = ">u" + ('1' if nbits == 8 else '2')
-                if color_type == 2:
-                    row_data_len = 3*width
-                else:
-                    row_data_len = width
+                # if color_type == 2:
+                #     row_data_len = 3*width
+                # else:
+                #     row_data_len = width
                 # row = np.frombuffer(u, dtype=descr).reshape(height,
                 #                                             row_data_len+1)
                 # if color_type == 2:
@@ -97,10 +97,10 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
                 sequence_number = struct.unpack("!I", seqstr)[0]
                 u = zlib.decompress(content[4:])
                 descr = ">u" + ('1' if nbits == 8 else '2')
-                if color_type == 2:
-                    row_data_len = 3*width
-                else:
-                    row_data_len = width
+                # if color_type == 2:
+                #     row_data_len = 3*width
+                # else:
+                #     row_data_len = width
                 # row = np.frombuffer(u, dtype=descr).reshape(height,
                 #                                             row_data_len+1)
                 # if color_type == 2:

@@ -16,6 +16,7 @@ def smoother(w):
     v = np.fft.ifftn(fw*fkernel).real
     return v
 
+
 height = 40
 width = 250
 num_frames = 30

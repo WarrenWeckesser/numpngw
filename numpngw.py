@@ -422,7 +422,7 @@ def _encode_latin1(s):
     if _PY3:
         unicode_type = str
     else:
-        unicode_type = unicode
+        unicode_type = eval('unicode')
     if isinstance(s, unicode_type):
         s = s.encode('latin-1')
     return s

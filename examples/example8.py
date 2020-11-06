@@ -79,7 +79,7 @@ lineplot, = ax.plot(x, u0, 'c-', linewidth=3)
 plt.tight_layout()
 
 ani = animation.FuncAnimation(fig, update_line, frames=len(t),
-                              init_func=lambda : None,
+                              init_func=lambda: None,
                               fargs=(x, sol, lineplot))
 writer = AnimatedPNGWriter(fps=12)
 ani.save('example8.png', dpi=60, writer=writer)
