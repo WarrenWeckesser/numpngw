@@ -71,7 +71,7 @@ bits_ones = np.ones((7, 5), dtype=bool)
 
 
 def bits_to_image(bits, blocksize=32, color=None):
-    bits = np.asarray(bits, dtype=np.bool)
+    bits = np.asarray(bits, dtype=bool)
     if color is None:
         color = np.array([255, 0, 0], dtype=np.uint8)
     else:
