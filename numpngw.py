@@ -48,7 +48,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.1.0"
+__version__ = "0.1.1.dev0"
 
 _PY3 = _sys.version_info > (3,)
 if _PY3:
