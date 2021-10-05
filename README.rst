@@ -1,11 +1,12 @@
 numpngw
 =======
 
-This python package defines the function ``write_png`` that writes a
-numpy array to a PNG file, and the function ``write_apng`` that writes
-a sequence of arrays to an animated PNG (APNG) file.  Also included
-is the class ``AnimatedPNGWriter`` that can be used to save a Matplotlib
-animation as an animated PNG file; see Example 8 for an example.
+This python package (availabe on PyPI at https://pypi.org/project/numpngw/)
+defines the function ``write_png`` that writes a numpy array to a PNG file,
+and the function ``write_apng`` that writes a sequence of arrays to an
+animated PNG (APNG) file.  Also included is the class ``AnimatedPNGWriter``
+that can be used to save a Matplotlib animation as an animated PNG file;
+see Example 8 for an example.
 
 Capabilities of ``write_png`` include:
 
