@@ -35,7 +35,7 @@ jobs:
       max-parallel: 4
       matrix:
         python-version: ['3.10']
-        numpy-version: [1.22.4, 1.23.0]
+        numpy-version: [1.22.4, 1.23.1]
 
     steps:
     - uses: actions/checkout@v3
