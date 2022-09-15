@@ -71,8 +71,9 @@ sol = kdv_solution(u0, t, L)
 print("Generating the animated PNG file.")
 
 fig = plt.figure(figsize=(7.5, 1.5))
-ax = fig.gca(title="Korteweg de Vries interacting solitons in a periodic "
-                   "domain (L = 80)")
+ax = fig.gca()
+ax.set_title("Korteweg de Vries interacting solitons in a periodic domain "
+             "(L = 80)")
 
 # Plot the initial condition. lineplot is reused in the animation.
 lineplot, = ax.plot(x, u0, 'c-', linewidth=3)
