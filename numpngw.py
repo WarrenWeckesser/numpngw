@@ -48,7 +48,7 @@ import numpy as _np
 
 __all__ = ['write_png', 'write_apng', 'AnimatedPNGWriter']
 
-__version__ = "0.1.3.dev0"
+__version__ = "0.1.3.dev1"
 
 _PY3 = _sys.version_info > (3,)
 if _PY3:
@@ -716,7 +716,7 @@ def _validate_iccp(iccp):
         if len(iccp) != 2:
             raise ValueError('`iccp` must have two elements.')
 
-        if type(iccp[0]) != str:
+        if not isinstance(iccp[0], str):
             raise ValueError('First element of `iccp` must be str.')
 
         try:
@@ -727,7 +727,7 @@ def _validate_iccp(iccp):
 
         _validate_keyword(profile_name, 'profile name')
 
-        if type(iccp[1]) != bytes:
+        if not isinstance(iccp[1], bytes):
             raise ValueError('Second element of `iccp` must be bytes.')
 
     return iccp
@@ -1274,7 +1274,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
             raise ValueError('len(delay) must be the same as len(seq)')
 
     # Validate seq
-    if type(seq) == _np.ndarray:
+    if isinstance(seq, _np.ndarray):
         # seq is a single numpy array containing the frames.
         seq = _np.ascontiguousarray(seq)
         _validate_array(seq[0])
