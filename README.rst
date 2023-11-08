@@ -125,8 +125,8 @@ The script::
     ncols = 5*w
     kernel = np.exp(-np.linspace(-2, 2, 35)**2)
     kernel = kernel/kernel.sum()
-    np.random.seed(123)
-    x = np.random.randn(nrows, ncols, 3)
+    rng = np.random.default_rng(seed=121263137472525314065)
+    x = rng.standard_normal((nrows, ncols, 3))
     x = np.apply_along_axis(lambda z: np.convolve(z, kernel, mode='same'), 0, x)
     x = np.apply_along_axis(lambda z: np.convolve(z, kernel, mode='same'), 1, x)
 
@@ -165,13 +165,13 @@ The script::
     img_height = 200
     img = np.zeros((img_height, img_width, 3), dtype=np.uint8)
 
-    np.random.seed(222)
+    rng = np.random.default_rng(seed=121263137472525314065)
     for _ in range(40):
-        width = np.random.randint(5, img_width // 5)
-        height = np.random.randint(5, img_height // 5)
-        row = np.random.randint(5, img_height - height - 5)
-        col = np.random.randint(5, img_width - width - 5)
-        color = np.random.randint(80, 256, size=2)
+        width = rng.integers(5, img_width // 5)
+        height = rng.integers(5, img_height // 5)
+        row = rng.integers(5, img_height - height - 5)
+        col = rng.integers(5, img_width - width - 5)
+        color = rng.integers(80, 256, size=2)
         img[row:row+height, col:col+width, 1:] = color
 
     write_png('example4.png', img, use_palette=True)
@@ -248,8 +248,8 @@ The script::
     height = 40
     width = 250
     num_frames = 30
-    np.random.seed(12345)
-    w = np.random.randn(num_frames, height, width, 3)
+    rng = np.random.default_rng(seed=121263137472525314065)
+    w = rng.standard_normal((num_frames, height, width, 3))
     for k in range(3):
         w[..., k] = smoother(w[..., k])
 

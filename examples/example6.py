@@ -20,8 +20,8 @@ def smoother(w):
 height = 40
 width = 250
 num_frames = 30
-np.random.seed(12345)
-w = np.random.randn(num_frames, height, width, 3)
+rng = np.random.default_rng(seed=121263137472525314065)
+w = rng.standard_normal((num_frames, height, width, 3))
 for k in range(3):
     w[..., k] = smoother(w[..., k])
 

@@ -434,7 +434,7 @@ class TestWritePng(unittest.TestCase):
     def test_write_png_nbit_grayscale(self):
         # Test the creation of grayscale images for bit depths of 1, 2, 4
         # 8 and 16, with or without a `transparent` color selected.
-        np.random.seed(123)
+        rng = np.random.default_rng(seed=121263137472525314065)
         for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
             for bitdepth in [1, 2, 4, 8, 16]:
                 for transparent in [None, 0]:
@@ -442,7 +442,7 @@ class TestWritePng(unittest.TestCase):
                         dt = np.uint16 if bitdepth == 16 else np.uint8
                         maxval = 2**bitdepth
                         sz = (3, 11)
-                        img = np.random.randint(0, maxval, size=sz).astype(dt)
+                        img = rng.integers(0, maxval, size=sz).astype(dt)
                         if transparent is not None:
                             img[2:4, 2:] = transparent
 
@@ -486,7 +486,7 @@ class TestWritePng(unittest.TestCase):
         # and 6, resp.), with bit depths 8 and 16.
         w = 25
         h = 15
-        np.random.seed(12345)
+        rng = np.random.default_rng(seed=121263137472525314065)
         for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
             for color_type in [4, 6]:
                 num_channels = 2 if color_type == 4 else 4
@@ -494,8 +494,7 @@ class TestWritePng(unittest.TestCase):
                     for interlace in [0, 1]:
                         dt = np.uint8 if bit_depth == 8 else np.uint16
                         sz = (h, w, num_channels)
-                        img = np.random.randint(0, 2**bit_depth,
-                                                size=sz).astype(dt)
+                        img = rng.integers(0, 2**bit_depth, size=sz).astype(dt)
                         f = io.BytesIO()
                         numpngw.write_png(f, img, filter_type=filter_type,
                                           interlace=interlace)
@@ -529,15 +528,15 @@ class TestWritePng(unittest.TestCase):
         # a `transparent` color selected, and with bit depth 8 and 16.
         w = 24
         h = 10
-        np.random.seed(12345)
+        rng = np.random.default_rng(seed=121263137472525314065)
         for filter_type in [0, 1, 2, 3, 4, "heuristic", "auto"]:
             for transparent in [None, (0, 0, 0)]:
                 for bit_depth in [8, 16]:
                     for interlace in [0, 1]:
                         dt = np.uint16 if bit_depth == 16 else np.uint8
                         maxval = 2**bit_depth
-                        img = np.random.randint(0, maxval,
-                                                size=(h, w, 3)).astype(dt)
+                        img = rng.integers(0, maxval,
+                                           size=(h, w, 3)).astype(dt)
                         if transparent:
                             img[2:4, 2:4] = transparent
 
@@ -643,7 +642,8 @@ class TestWritePng(unittest.TestCase):
         w = 250
         h = 150
         max_chunk_len = 500
-        img = np.random.randint(0, 256, size=(h, w)).astype(np.uint8)
+        rng = np.random.default_rng(seed=121263137472525314065)
+        img = rng.integers(0, 256, size=(h, w)).astype(np.uint8)
         f = io.BytesIO()
         numpngw.write_png(f, img, max_chunk_len=max_chunk_len)
 
@@ -681,8 +681,8 @@ class TestWritePng(unittest.TestCase):
         self.assertEqual(file_contents, b"")
 
     def test_write_png_timestamp_gamma_chromaticity(self):
-        np.random.seed(123)
-        img = np.random.randint(0, 256, size=(10, 10)).astype(np.uint8)
+        rng = np.random.default_rng(seed=121263137472525314065)
+        img = rng.integers(0, 256, size=(10, 10)).astype(np.uint8)
         f = io.BytesIO()
         timestamp = (1452, 4, 15, 8, 9, 10)
         gamma = 2.2
@@ -721,12 +721,12 @@ class TestWritePng(unittest.TestCase):
         # Test creation of RGB images (color type 2), with a background color.
         w = 16
         h = 8
-        np.random.seed(123)
+        rng = np.random.default_rng(seed=121263137472525314065)
         for bit_depth in [8, 16]:
             maxval = 2**bit_depth
             bg = (maxval - 1, maxval - 2, maxval - 3)
             dt = np.uint16 if bit_depth == 16 else np.uint8
-            img = np.random.randint(0, maxval, size=(h, w, 3)).astype(dt)
+            img = rng.integers(0, maxval, size=(h, w, 3)).astype(dt)
 
             f = io.BytesIO()
             numpngw.write_png(f, img, background=bg, filter_type=0)
@@ -756,12 +756,12 @@ class TestWritePng(unittest.TestCase):
         # Test creation of sBIT chunks for color_type 0 and 2.
         w = 7
         h = 5
-        np.random.seed(123)
+        rng = np.random.default_rng(seed=121263137472525314065)
         for bit_depth in [8, 16]:
             for size in [(h, w), (h, w, 3)]:
                 maxval = 2**bit_depth
                 dt = np.uint16 if bit_depth == 16 else np.uint8
-                img = np.random.randint(0, maxval, size=size).astype(dt)
+                img = rng.integers(0, maxval, size=size).astype(dt)
 
                 color_type = 0 if len(size) == 2 else 2
 
@@ -802,7 +802,6 @@ class TestWritePng(unittest.TestCase):
         # when use_palette is True.
         w = 6
         h = 8
-        np.random.seed(123)
         for bg_in_img in [True, False]:
             bit_depth = 8
             maxval = 2**bit_depth
@@ -975,8 +974,8 @@ class TestWritePngFilterType(unittest.TestCase):
         w = 22
         h = 10
         bitdepth = 8
-        np.random.seed(123)
-        img = np.random.randint(0, 256, size=(h, w)).astype(np.uint8)
+        rng = np.random.default_rng(seed=121263137472525314065)
+        img = rng.integers(0, 256, size=(h, w)).astype(np.uint8)
 
         f = io.BytesIO()
         numpngw.write_png(f, img, filter_type=1)
@@ -1008,9 +1007,9 @@ class TestWriteApng(unittest.TestCase):
         num_frames = 4
         w = 25
         h = 15
-        np.random.seed(12345)
+        rng = np.random.default_rng(seed=121263137472525314065)
         seq_size = (num_frames, h, w, 4)
-        seq = np.random.randint(0, 256, size=seq_size).astype(np.uint8)
+        seq = rng.integers(0, 256, size=seq_size).astype(np.uint8)
         f = io.BytesIO()
         numpngw.write_apng(f, seq)
 
@@ -1063,9 +1062,9 @@ class TestWriteApng(unittest.TestCase):
         num_frames = 2
         w = 16
         h = 8
-        np.random.seed(12345)
+        rng = np.random.default_rng(seed=121263137472525314065)
         seq_size = (num_frames, h, w, 4)
-        seq = np.random.randint(0, 256, size=seq_size).astype(np.uint8)
+        seq = rng.integers(0, 256, size=seq_size).astype(np.uint8)
         default_image = np.zeros((h, w, 4), dtype=np.uint8)
 
         f = io.BytesIO()
@@ -1118,7 +1117,7 @@ class TestWriteApng(unittest.TestCase):
         # Also test the chromaticity argument.
         w = 16
         h = 8
-        np.random.seed(123)
+        rng = np.random.default_rng(seed=121263137472525314065)
         num_frames = 3
         chromaticity = [[0.500, 0.750],
                         [0.125, 0.960],
@@ -1128,8 +1127,8 @@ class TestWriteApng(unittest.TestCase):
             maxval = 2**bit_depth
             bg = (maxval - 1, maxval - 2, maxval - 3)
             dt = np.uint16 if bit_depth == 16 else np.uint8
-            seq = np.random.randint(0, maxval,
-                                    size=(num_frames, h, w, 3)).astype(dt)
+            seq = rng.integers(0, maxval,
+                               size=(num_frames, h, w, 3)).astype(dt)
 
             f = io.BytesIO()
             numpngw.write_apng(f, seq, background=bg, filter_type=0,

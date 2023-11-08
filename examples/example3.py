@@ -12,8 +12,8 @@ nrows = 3*w
 ncols = 5*w
 kernel = np.exp(-np.linspace(-2, 2, 35)**2)
 kernel = kernel/kernel.sum()
-np.random.seed(123)
-x = np.random.randn(nrows, ncols, 3)
+rng = np.random.default_rng(seed=121263137472525314065)
+x = rng.standard_normal((nrows, ncols, 3))
 x = np.apply_along_axis(lambda z: np.convolve(z, kernel, mode='same'), 0, x)
 x = np.apply_along_axis(lambda z: np.convolve(z, kernel, mode='same'), 1, x)
 
