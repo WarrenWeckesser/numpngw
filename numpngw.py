@@ -32,9 +32,6 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 """
 
-from __future__ import (division as _division,
-                        print_function as _print_function)
-
 import sys as _sys
 import contextlib as _contextlib
 from io import BytesIO as _BytesIO

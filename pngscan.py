@@ -3,8 +3,6 @@ The function pngscan reads a PNG file and prints some of the information
 in the file to stdout.  It is used for testing and debugging.
 """
 
-from __future__ import print_function, division
-
 import struct
 import zlib
 
