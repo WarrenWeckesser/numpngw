@@ -26,6 +26,7 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
 
     This function is used for testing and debugging.
     """
+    print(f"PNG file: {filename}")
     with open(filename, 'rb') as f:
         start = f.read(8)
         if start != png_signature:
@@ -182,14 +183,41 @@ def pngscan(filename, chunk_info_only=False, print_palette=False,
             else:
                 print("%s: (%i bytes)" % (chunk_type, len(content)))
 
-        if len(compressed_contents) == 0:
-            print("ERROR: No IDAT chunks found.")
-        compressed_datastream = b''.join(compressed_contents)
-        print("Compressed image datastream has", len(compressed_datastream),
-              "bytes.")
-        try:
-            u = zlib.decompress(compressed_datastream)
-        except Exception:
-            print("ERROR: Failed to decompress the image data.")
-        else:
-            print("Decompressed image datastream has", len(u), " bytes.")
+        if not chunk_info_only:
+            if len(compressed_contents) == 0:
+                print("ERROR: No IDAT chunks found.")
+            else:
+                compressed_datastream = b''.join(compressed_contents)
+                print("Compressed image datastream has "
+                      f"{len(compressed_datastream)} bytes.")
+                try:
+                    u = zlib.decompress(compressed_datastream)
+                except Exception:
+                    print("ERROR: Failed to decompress the image data.")
+                else:
+                    print(f"Decompressed image datastream has {len(u)} bytes.")
+
+
+if __name__ == "__main__":
+    from os import path
+    import argparse
+    import pathlib
+
+    descr = 'Print some of the information from a PNG file.'
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument('file', type=pathlib.Path,
+                        help='PNG file')
+    parser.add_argument('-c', '--chunk-info-only', action='store_true',
+                        help="Display only the length, type and CRC for the "
+                             "chunks in the file.")
+    parser.add_argument('-p', '--print-palette', action='store_true',
+                        help=('Print the palette, if there is one.'))
+    parser.add_argument('-t', '--print-trans', action='store_true',
+                        help=('Print transparency info.'))
+    args = parser.parse_args()
+
+    src = path.join(args.file.resolve())
+    pngscan(src,
+            chunk_info_only=args.chunk_info_only,
+            print_palette=args.print_palette,
+            print_trans=args.print_trans)
