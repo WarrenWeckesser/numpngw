@@ -29,7 +29,7 @@ setup(
     name='numpngw',
     version=get_numpngw_version(),
     author='Warren Weckesser',
-    description="Write numpy array(s) to a PNG or animated PNG file.",
+    description="Write numpy arrays to a PNG or animated PNG file.",
     long_description=_long_description,
     license="BSD",
     url="https://github.com/WarrenWeckesser/numpngw",
