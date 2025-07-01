@@ -383,11 +383,9 @@ def _write_data(f, a, bitdepth, max_chunk_len=None, sequence_number=None,
 
     zstream = None
     for filter_type in filter_types:
-        stream = b''
-        for a in passes:
-            if a.size > 0:
-                stream += _create_stream(a, filter_type=filter_type)
-        z = _zlib.compress(stream)
+        streams = [_create_stream(a, filter_type=filter_type)
+                   for a in passes if a.size > 0]
+        z = _zlib.compress(b''.join(streams))
         if zstream is None or len(z) < len(zstream):
             zstream = z
 
