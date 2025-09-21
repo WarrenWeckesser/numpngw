@@ -56,9 +56,8 @@ else:
 
 
 def _software_text():
-    software = ("numpngw (version %s), "
-                "https://github.com/WarrenWeckesser/numpngw" % __version__)
-    return software
+    return (f"numpngw (version {__version__}), "
+            "https://github.com/WarrenWeckesser/numpngw")
 
 
 def _filter0(row, prev_row):
@@ -93,8 +92,7 @@ def _filter3(row, prev_row):
     a = _np.zeros_like(row, dtype=_np.int64)
     a[1:] = row[:-1]
     c = ((a + prev_row) // 2).astype(row.dtype)
-    d = row - c
-    return d
+    return row - c
 
 
 def _filter3inv(frow, prev_row):
@@ -124,8 +122,7 @@ def _filter4(row, prev_row):
     pc = _np.abs(p - c)
     y = _np.where((pa <= pb) & (pa <= pc), a, _np.where(pb <= pc, b, c))
     pr = y.astype(_np.uint8)
-    d = row - pr
-    return d
+    return row - pr
 
 
 def _filter4inv(frow, prev_row):
@@ -177,8 +174,7 @@ def _create_stream(a, filter_type=None):
         filter_type = "heuristic"
     allowed_filter_types = [0, 1, 2, 3, 4, "heuristic"]
     if filter_type not in allowed_filter_types:
-        raise ValueError('filter_type must be one of %r' %
-                         (allowed_filter_types,))
+        raise ValueError(f'filter_type must be one of {allowed_filter_types}')
 
     if a.ndim == 2:
         # Gray scale.  Add a trivial third dimension.
@@ -202,8 +198,7 @@ def _create_stream(a, filter_type=None):
             lines.append(chr(filter_type).encode('ascii') +
                          filtered_row.tobytes())
         prev_row = row_be
-    stream = b''.join(lines)
-    return stream
+    return b''.join(lines)
 
 
 def _write_chunk(f, chunk_type, chunk_data):
@@ -280,7 +275,7 @@ def _write_bkgd(f, color, color_type):
     elif color_type == 3:
         chunk_data = _struct.pack("B", color)
     else:
-        raise ValueError("invalid chunk_type %r" % (color_type,))
+        raise ValueError(f"invalid color_type {color_type!r} for bKGD chunk")
     _write_chunk(f, b"bKGD", chunk_data)
 
 
@@ -319,8 +314,8 @@ def _write_iend(f):
 def _write_actl(f, num_frames, num_plays):
     """Write an acTL chunk to `f`."""
     if num_frames < 1:
-        raise ValueError("Attempt to create acTL chunk with num_frames (%i) "
-                         "less than 1." % (num_frames,))
+        raise ValueError("Attempt to create acTL chunk with num_frames "
+                         f"({num_frames}) less than 1.")
     chunk_data = _struct.pack("!II", num_frames, num_plays)
     _write_chunk(f, b"acTL", chunk_data)
 
@@ -439,25 +434,23 @@ def _validate_keyword(keyword, keyname='keyword'):
 
     """
     if not (0 < len(keyword) < 80):
-        raise ValueError("length of %s must greater than 0 and less "
-                         "than 80." % (keyname,))
+        raise ValueError(f"length of {keyname} must greater than 0 and less "
+                         "than 80.")
 
     kw_check = all([(31 < _bord(c) < 127) or (160 < _bord(c) < 256)
                     for c in keyword])
     if not kw_check:
-        raise ValueError("%s %r contains non-printable characters or "
-                         "a non-breaking space (code 160)." %
-                         (keyname, keyword,))
+        raise ValueError(f"{keyname} {keyword!r} contains non-printable characters "
+                         "or a non-breaking space (code 160).")
 
     if keyword.startswith(b' '):
-        raise ValueError("%s %r begins with a space." % (keyname, keyword,))
+        raise ValueError(f"{keyname} {keyword!r} begins with a space.")
 
     if keyword.endswith(b' '):
-        raise ValueError("%s %r ends with a space." % (keyname, keyword,))
+        raise ValueError(f"{keyname} {keyword!r} ends with a space.")
 
     if b'  ' in keyword:
-        raise ValueError("%s %r contains consecutive spaces." %
-                         (keyname, keyword,))
+        raise ValueError(f"{keyname} {keyword!r} contains consecutive spaces.")
 
 
 def _validate_text(text_list):
@@ -592,8 +585,7 @@ def _pack(a, bitdepth):
 def _unpack(p, bitdepth, width):
     powers = _np.arange(bitdepth-1, -1, -1)
     up = _np.unpackbits(p).reshape(p.shape[0], -1, bitdepth).dot(2**powers)
-    a = up[:, :width]
-    return a
+    return up[:, :width]
 
 
 def _validate_array(a):
@@ -664,8 +656,8 @@ def _get_color_type(a, use_palette):
 
 def _validate_bitdepth(bitdepth, a, color_type):
     if bitdepth not in [None, 1, 2, 4, 8, 16]:
-        raise ValueError('bitdepth %i is not valid.  Valid values are '
-                         '1, 2, 4, 8 or 16' % (bitdepth,))
+        raise ValueError(f'bitdepth {bitdepth} is not valid.  Valid values are '
+                         '1, 2, 4, 8 or 16')
 
     if bitdepth is not None:
         if color_type in [2, 4, 6]:
@@ -758,13 +750,14 @@ def _validate_sbit(sbit, color_type, bitdepth):
     required_length = {0: 1, 2: 3, 3: 3, 4: 2, 6: 4}
 
     if len_sbit != required_length[color_type]:
-        raise ValueError('For color type %d, len(sbit) must be %d' %
-                         (color_type, required_length[color_type]))
+        msg = (f'For color type {color_type}, len(sbit) must be '
+               f'{required_length[color_type]}')
+        raise ValueError(msg)
     for n in sbit:
         if n < 1 or n > bitdepth:
-            raise ValueError('Each value in sbit must be greater than 0 '
-                             'and less than or equal to the bit depth %s'
-                             % bitdepth)
+            msg = ('Each value in sbit must be greater than 0 and '
+                   f'less than or equal to the bit depth {bitdepth}')
+            raise ValueError(msg)
     return sbit
 
 
@@ -796,21 +789,18 @@ def _add_background_color(background, palette, trans, bitdepth):
         if bitdepth is None:
             bitdepth = 8
         if len(palette) == 2**bitdepth:
-            msg = ("The array already has the maximum of %i colors, and a "
+            p = 2**bitdepth
+            msg = ("The array already has the maximum of {p} colors, and a "
                    "background color that is not in the array has been given. "
-                   "With a bitdepth of %i, no more than %i colors are allowed "
-                   "when using a palette." % (2**bitdepth, bitdepth,
-                                              2**bitdepth))
+                   f"With a bitdepth of {bitdepth}, no more than {p} colors are "
+                   "allowed when using a palette.")
             raise ValueError(msg)
-        else:
-            index = len(palette)
-            palette = _np.append(palette,
-                                 _np.array([background],
-                                           dtype=_np.uint8),
-                                 axis=0)
-            if trans is not None:
-                trans = _np.append(trans, [_np.uint8(255)])
-            background = index
+        index = len(palette)
+        palette = _np.append(palette, _np.array([background], dtype=_np.uint8),
+                             axis=0)
+        if trans is not None:
+            trans = _np.append(trans, [_np.uint8(255)])
+        background = index
 
     return background, palette, trans
 
@@ -1035,10 +1025,10 @@ def write_png(fileobj, a, text_list=None, use_palette=False,
         bd = bitdepth if bitdepth is not None else 8
         max_num_colors = 2**bd
         if len(palette) > max_num_colors:
-            raise ValueError("The array has %i colors.  With bit depth %i, "
-                             "no more than %i colors are allowed when using "
-                             "a palette." %
-                             (len(palette), bd, max_num_colors))
+            msg = (f"The array has {len(palette)} colors.  With bit depth {bd}, "
+                   f"no more than {max_num_colors} colors are allowed when using "
+                   "a palette.")
+            raise ValueError(msg)
 
         if background is not None:
             # A default background color has been given, and we're creating
@@ -1122,11 +1112,11 @@ def _msec_to_numden(delay):
         num = f.numerator
         den = f.denominator
     if (num, den) == (1, 0):
-        raise ValueError("delay=%r is too large to convert to "
-                         "delay_num/delay_den" % (delay,))
+        raise ValueError(f"{delay=!r} is too large to convert to "
+                         "delay_num/delay_den")
     if (num, den) == (0, 1):
-        raise ValueError("delay=%r is too small to convert to "
-                         "delay_num/delay_den" % (delay,))
+        raise ValueError(f"{delay=!r} is too small to convert to "
+                         "delay_num/delay_den")
     return num, den
 
 
@@ -1246,7 +1236,6 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
 
     Notes
     -----
-
     See the `write_png` docstring for additional details about some
     of the arguments.
     """
@@ -1299,10 +1288,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
             raise ValueError('default_image must have the same data type as '
                              'the arrays in seq')
         if default_image.shape[0] > height or default_image.shape[1] > width:
-            raise ValueError("The default image has shape (%i, %i), which "
-                             "exceeds the overall image size implied by `seq` "
-                             "and `offset`, which is (%i,  %i)" %
-                             (default_image.shape[:2] + (height, width)))
+            msg = (f"The default image has shape {default_image.shape}, which "
+                   "exceeds the overall image size implied by `seq` and "
+                   f"`offset`, which is ({height}, {width})")
+            raise ValueError(msg)
 
     color_type = _get_color_type(seq[0], use_palette)
     palette = None
@@ -1313,7 +1302,7 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         if default_image is None:
             seq, palette, trans = _palettize_seq(seq)
         else:
-            tmp = [default_image] + [a for a in seq]
+            tmp = [default_image] + list(seq)
             index_tmp, palette, trans = _palettize_seq(tmp)
             default_image = index_tmp[0]
             seq = index_tmp[1:]
@@ -1325,10 +1314,10 @@ def write_apng(fileobj, seq, delay=None, num_plays=0, default_image=None,
         bd = bitdepth if bitdepth is not None else 8
         max_num_colors = 2**bd
         if len(palette) > max_num_colors:
-            raise ValueError("The arrays have a total of %i colors. "
-                             "With bit depth %i, no more than %i colors are "
-                             "allowed when using a palette." %
-                             (len(palette), bd, max_num_colors))
+            msg = (f"The arrays have a total of {len(palette)} colors. "
+                   f"With bit depth {bd}, no more than {max_num_colors} "
+                   "colors are allowed when using a palette.")
+            raise ValueError(msg)
 
         if background is not None:
             # A default background color has been given, and we're creating
@@ -1457,11 +1446,11 @@ def _finddiff(img1, img2):
     return row_range, col_range
 
 
-class AnimatedPNGWriter(object):
+class AnimatedPNGWriter:
     """
-    This class implements the interface required by the matplotlib class
-    `matplotlib.animation.MovieWriter`.  An instance of this class may be
-    used as the `writer` argument of `matplotlib.animation.Animation.save()`.
+    AnimatedPNGWriter implements the interface required by the matplotlib class
+    `matplotlib.animation.AbstractMovieWriter`.  An instance of this class may
+    be used as the `writer` argument of `matplotlib.animation.Animation.save()`.
 
     This class is experimental.  It may change without warning in the next
     release.
@@ -1477,6 +1466,7 @@ class AnimatedPNGWriter(object):
         self._filter_type = filter_type
 
     def setup(self, fig, outfile, dpi, *args):
+        """Prepare for generating the animated PNG."""
         self.fig = fig
         self.outfile = outfile
         self.dpi = dpi
@@ -1484,6 +1474,7 @@ class AnimatedPNGWriter(object):
         self._prev_frame = None
 
     def grab_frame(self, **savefig_kwargs):
+        """'Grab' the current plot and add it to the _frames list."""
         img_io = _BytesIO()
         self.fig.savefig(img_io, format='rgba', dpi=self.dpi, **savefig_kwargs)
         raw = img_io.getvalue()
@@ -1515,7 +1506,8 @@ class AnimatedPNGWriter(object):
         self._prev_frame = a
 
     def finish(self):
-        for img, offset, delay in self._frames:
+        """Write the frames to the PNG file."""
+        for img, _offset, _delay in self._frames:
             if not _np.all(img[:, :, 3] == 255):
                 break
         else:
