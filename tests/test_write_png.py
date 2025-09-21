@@ -1,4 +1,3 @@
-import unittest
 import io
 import struct
 import zlib
@@ -427,7 +426,7 @@ def check_iend(file_contents):
     assert_equal(file_contents, b"")
 
 
-class TestWritePng(unittest.TestCase):
+class TestWritePng:
 
     def test_write_png_nbit_grayscale(self):
         # Test the creation of grayscale images for bit depths of 1, 2, 4
@@ -607,7 +606,7 @@ class TestWritePng(unittest.TestCase):
                     # Check the PLTE chunk.
                     chunk_type, chunk_data, file_contents = \
                         next_chunk(file_contents)
-                    self.assertEqual(chunk_type, b"PLTE")
+                    assert chunk_type == b"PLTE"
                     p = np.frombuffer(chunk_data,
                                       dtype=np.uint8).reshape(-1, 3)
                     n = ncolors*3
@@ -623,7 +622,7 @@ class TestWritePng(unittest.TestCase):
                     # Check the IDAT chunk.
                     chunk_type, chunk_data, file_contents = \
                         next_chunk(file_contents)
-                    self.assertEqual(chunk_type, b"IDAT")
+                    assert chunk_type == b"IDAT"
                     decompressed = zlib.decompress(chunk_data)
                     stream = np.frombuffer(decompressed, dtype=np.uint8)
                     height, width = img.shape[:2]
@@ -662,9 +661,9 @@ class TestWritePng(unittest.TestCase):
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
             if chunk_type != b"IDAT":
                 break
-            self.assertEqual(chunk_type, b"IDAT")
+            assert chunk_type == b"IDAT"
             zstream += chunk_data
-            self.assertLessEqual(len(chunk_data), max_chunk_len)
+            assert len(chunk_data) <= max_chunk_len
         data = zlib.decompress(zstream)
         b = np.frombuffer(data, dtype=np.uint8)
         lines = b.reshape(h, w + 1)
@@ -673,10 +672,10 @@ class TestWritePng(unittest.TestCase):
 
         # Check the IEND chunk; chunk_type and chunk_data were read
         # in the loop above.
-        self.assertEqual(chunk_type, b"IEND")
-        self.assertEqual(chunk_data, b"")
+        assert chunk_type == b"IEND"
+        assert chunk_data == b""
 
-        self.assertEqual(file_contents, b"")
+        assert file_contents == b""
 
     def test_write_png_timestamp_gamma_chromaticity(self):
         rng = np.random.default_rng(seed=121263137472525314065)
@@ -827,7 +826,7 @@ class TestWritePng(unittest.TestCase):
 
             # Check the PLTE chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
-            self.assertEqual(chunk_type, b"PLTE")
+            assert chunk_type == b"PLTE"
             plte = np.frombuffer(chunk_data, dtype=np.uint8).reshape(-1, 3)
             expected_palette = np.arange(1, w*h*3+1,
                                          dtype=np.uint8).reshape(-1, 3)
@@ -966,7 +965,7 @@ class TestWritePng(unittest.TestCase):
                       use_palette=True, bitdepth=1)
 
 
-class TestWritePngFilterType(unittest.TestCase):
+class TestWritePngFilterType:
 
     def test_basic(self):
         w = 22
@@ -999,7 +998,7 @@ class TestWritePngFilterType(unittest.TestCase):
         check_iend(file_contents)
 
 
-class TestWriteApng(unittest.TestCase):
+class TestWriteApng:
 
     def test_write_apng_8bit_RGBA(self):
         num_frames = 4
@@ -1042,9 +1041,9 @@ class TestWriteApng(unittest.TestCase):
 
             # Check the fdAT chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
-            self.assertEqual(chunk_type, b"fdAT")
+            assert chunk_type == b"fdAT"
             actual_seq_num = struct.unpack("!I", chunk_data[:4])[0]
-            self.assertEqual(actual_seq_num, sequence_number)
+            assert actual_seq_num == sequence_number
             sequence_number += 1
             decompressed = zlib.decompress(chunk_data[4:])
             b = np.frombuffer(decompressed, dtype=np.uint8)
@@ -1096,9 +1095,9 @@ class TestWriteApng(unittest.TestCase):
 
             # Check the fdAT chunk.
             chunk_type, chunk_data, file_contents = next_chunk(file_contents)
-            self.assertEqual(chunk_type, b"fdAT")
+            assert chunk_type == b"fdAT"
             actual_seq_num = struct.unpack("!I", chunk_data[:4])[0]
-            self.assertEqual(actual_seq_num, sequence_number)
+            assert actual_seq_num == sequence_number
             sequence_number += 1
             decompressed = zlib.decompress(chunk_data[4:])
             b = np.frombuffer(decompressed, dtype=np.uint8)
@@ -1173,9 +1172,9 @@ class TestWriteApng(unittest.TestCase):
                 # Check the fdAT chunk.
                 nxt = next_chunk(file_contents)
                 chunk_type, chunk_data, file_contents = nxt
-                self.assertEqual(chunk_type, b"fdAT")
+                assert chunk_type == b"fdAT"
                 actual_seq_num = struct.unpack("!I", chunk_data[:4])[0]
-                self.assertEqual(actual_seq_num, sequence_number)
+                assert actual_seq_num == sequence_number
                 sequence_number += 1
                 decompressed = zlib.decompress(chunk_data[4:])
                 b = np.frombuffer(decompressed, dtype=np.uint8)
@@ -1197,6 +1196,3 @@ class TestWriteApng(unittest.TestCase):
         assert_raises(ValueError, numpngw.write_apng, f, [img1, img2],
                       use_palette=True, bitdepth=1)
 
-
-if __name__ == '__main__':
-    unittest.main()

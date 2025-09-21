@@ -1,11 +1,10 @@
 
-import unittest
 import numpy as np
 from numpy.testing import assert_equal, assert_array_equal
 import numpngw
 
 
-class TestUtilities(unittest.TestCase):
+class TestUtilities:
 
     def test_palettize(self):
         colors = np.array([[10, 20, 30],
@@ -168,7 +167,3 @@ class TestUtilities(unittest.TestCase):
                                [0x43, 0x21, 0xF0],
                                [0x00, 0x00, 0x10]], dtype=np.uint8)
         assert_array_equal(b, expected_b)
-
-
-if __name__ == '__main__':
-    unittest.main()
